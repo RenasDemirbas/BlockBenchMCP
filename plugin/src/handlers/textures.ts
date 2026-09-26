@@ -3,6 +3,7 @@
 import { register, fail, requireProject } from '../registry';
 import { resolveNode, collectCubes, resolveTexture, describeTexture, clampInt, hash01, textureCoverage, FACE_KEYS } from '../util';
 import { unthrottledTimersActive } from '../timers';
+import { paintTarget, commitBitmap, findLayer } from './layers';
 
 type PreparedOp = {
   op: any;
@@ -282,12 +283,30 @@ function faceCropRegion(params: any, explicitTexture: any) {
   return { texture, region: { x: px, y: py, width: pw, height: ph }, faces: rects };
 }
 
+/** One layer on its own, placed at its offset on a texture-sized canvas. */
+function isolatedLayerCanvas(texture: any, layerId: string): { canvas: any; layer: any } {
+  const layer = findLayer(texture, layerId);
+  if (!layer) {
+    fail(`Texture "${texture.name}" has no layer "${layerId}". ${texture.layers_enabled ? `Layers: ${texture.layers.map((l: any) => l.name).join(', ')}.` : 'Layers are not enabled on it — see texture_layers.'}`);
+  }
+  if (layer.type === 'layer_group') fail(`"${layer.name}" is a layer group; pick one of its pixel layers.`);
+  const canvas = document.createElement('canvas');
+  canvas.width = texture.width;
+  canvas.height = texture.height;
+  const ctx = canvas.getContext('2d')!;
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(layer.canvas, layer.offset[0], layer.offset[1], layer.scaled_width ?? layer.width, layer.scaled_height ?? layer.height);
+  return { canvas, layer };
+}
+
 register('get_texture', (params) => {
   requireProject();
   const explicit = params.id ? resolveTexture(params.id) : null;
   const crop = params.element ? faceCropRegion(params, explicit) : null;
   const texture = crop ? crop.texture : resolveTexture(params.id);
   const maxSize = clampInt(params.max_size ?? 512, 16, 2048);
+  const isolated = params.layer ? isolatedLayerCanvas(texture, params.layer) : null;
+  const source = isolated ? isolated.canvas : texture.canvas;
 
   const srcX = crop ? crop.region.x : 0;
   const srcY = crop ? crop.region.y : 0;
@@ -296,7 +315,7 @@ register('get_texture', (params) => {
 
   let dataUrl: string;
   if (!crop && texture.width <= maxSize && texture.height <= maxSize && params.scale == null) {
-    dataUrl = texture.canvas.toDataURL('image/png');
+    dataUrl = source.toDataURL('image/png');
   } else {
     // A crop is meant to be INSPECTED, so a small face is scaled UP to fill
     // max_size rather than returned as a handful of pixels.
@@ -306,12 +325,13 @@ register('get_texture', (params) => {
     canvas.height = Math.max(1, Math.round(srcH * scale));
     const ctx = canvas.getContext('2d')!;
     ctx.imageSmoothingEnabled = scale > 1 ? false : true;
-    ctx.drawImage(texture.canvas, srcX, srcY, srcW, srcH, 0, 0, canvas.width, canvas.height);
+    ctx.drawImage(source, srcX, srcY, srcW, srcH, 0, 0, canvas.width, canvas.height);
     dataUrl = canvas.toDataURL('image/png');
   }
   const cov = textureCoverage(texture);
   return {
     ...describeTexture(texture),
+    showing_layer: isolated ? isolated.layer.name : undefined,
     visible_pixels: cov.visible_pixels,
     cropped_to: crop ? { ...crop.region, faces: crop.faces, zoom: Math.round((Math.min(maxSize / srcW, maxSize / srcH)) * 100) / 100 } : undefined,
     // A transparent PNG looks WHITE in most viewers — say so explicitly.
@@ -497,11 +517,17 @@ register('paint_texture', (params) => {
   }
 
   let opCount = 0;
-  const paintOps = (canvas: HTMLCanvasElement, env: any, list: PreparedOp[]) => {
-    const ctx: CanvasRenderingContext2D = env.ctx;
+  const paintOps = (target: { canvas: any; ctx: any; offset: [number, number] }, tex: any, list: PreparedOp[]) => {
+    const { canvas } = target;
+    const ctx: CanvasRenderingContext2D = target.ctx;
+    // Ops speak TEXTURE pixels, but a layer can sit at an offset and be
+    // smaller than the texture — shift the context so both line up.
+    const [ox, oy] = target.offset;
+    const texW = tex.width, texH = tex.height;
     ctx.save();
     try {
     ctx.imageSmoothingEnabled = false;
+    ctx.translate(-ox, -oy);
     for (const { op, map, geo } of list) {
       const color = op.color || '#000000';
       ctx.globalAlpha = op.opacity ?? 1;
@@ -562,7 +588,8 @@ register('paint_texture', (params) => {
         }
       } else if (op.type === 'fill') {
         const [sx, sy] = px(op.at);
-        floodFill(ctx, canvas, sx, sy, color, op.opacity ?? 1, op.tolerance ?? 0);
+        // Pixel reads/writes ignore the context transform: go to layer space.
+        floodFill(ctx, canvas, sx - ox, sy - oy, color, op.opacity ?? 1, op.tolerance ?? 0);
       } else if (op.type === 'gradient') {
         const stops: GradientStop[] = Array.isArray(op.stops) && op.stops.length
           ? op.stops
@@ -611,7 +638,7 @@ register('paint_texture', (params) => {
           const pad = op.target ? 0 : 1; // normalized [1,1] already maps to the exclusive face edge
           ctx.fillRect(Math.min(cx0, cx1), Math.min(cy0, cy1), Math.abs(cx1 - cx0) + pad, Math.abs(cy1 - cy0) + pad);
         } else {
-          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          ctx.fillRect(0, 0, texW, texH);
         }
       } else if (op.type === 'clear') {
         const [x0, y0] = px(op.from), [x1, y1] = px(op.to);
@@ -620,7 +647,7 @@ register('paint_texture', (params) => {
         const from = op.from ?? [0, 0];
         // No target and no rect means the whole bitmap — speckling an entire
         // atlas in one op is the common case. A targeted op spans its face.
-        const to = op.to ?? (op.target ? [1, 1] : [canvas.width - 1, canvas.height - 1]);
+        const to = op.to ?? (op.target ? [1, 1] : [texW - 1, texH - 1]);
         const [ax0, ay0] = px(from), [ax1, ay1] = px(to);
         const x = Math.min(ax0, ax1), y = Math.min(ay0, ay1);
         const w = Math.abs(ax1 - ax0) + (op.target ? 0 : 1);
@@ -720,17 +747,23 @@ register('paint_texture', (params) => {
   };
 
   const textures = [...byTexture.keys()];
+  const layersUsed: string[] = [];
+  const layersCreated: string[] = [];
   Undo.initEdit({ textures, bitmap: true });
   try {
     for (const [tex, list] of byTexture) {
-      tex.edit((canvas: HTMLCanvasElement, env: any) => paintOps(canvas, env, list), { no_undo: true });
+      const target = paintTarget(tex, params.layer);
+      if (target.layer) layersUsed.push(`${tex.name} → ${target.layer.name}`);
+      if (target.created) layersCreated.push(`${tex.name} → ${target.layer.name}`);
+      paintOps(target, tex, list);
+      commitBitmap(tex);
     }
   } catch (err) {
     // Revert any partially painted pixels and drop the dangling undo entry.
     Undo.cancelEdit(true);
     throw err;
   }
-  Undo.finishEdit('MCP: Paint texture');
+  Undo.finishEdit('MCP: Paint texture', { textures, bitmap: true });
   UVEditor.vue?.updateTextureCanvas?.();
   return {
     painted: true,
@@ -738,6 +771,8 @@ register('paint_texture', (params) => {
     ops_requested: params.ops.length,
     expanded: opCount !== params.ops.length ? `${params.ops.length} op(s) expanded to ${opCount} face op(s)` : undefined,
     textures: textures.map((t: any) => t.name),
+    layer: layersUsed.length ? layersUsed : undefined,
+    layers_created: layersCreated.length ? layersCreated : undefined,
   };
 });
 
@@ -813,12 +848,16 @@ register('paint_faces', (params) => {
   if (!jobs.size) fail(`No paintable faces found.${skipped.length ? ` Skipped: ${skipped.join(', ')}` : ''}`);
 
   const textures = [...jobs.keys()];
+  const layersCreated: string[] = [];
   Undo.initEdit({ textures, bitmap: true });
-  for (const [tex, list] of jobs) {
-    tex.edit((canvas: HTMLCanvasElement, env: any) => {
-      const ctx: CanvasRenderingContext2D = env.ctx;
+  try {
+    for (const [tex, list] of jobs) {
+      const target = paintTarget(tex, params.layer);
+      if (target.created) layersCreated.push(`${tex.name} → ${target.layer.name}`);
+      const ctx: CanvasRenderingContext2D = target.ctx;
       ctx.save();
       ctx.imageSmoothingEnabled = false;
+      ctx.translate(-target.offset[0], -target.offset[1]);
       const fx = tex.width / tex.getUVWidth();
       const fy = tex.height / tex.getUVHeight();
       for (const job of list) {
@@ -834,14 +873,19 @@ register('paint_faces', (params) => {
         painted.push(job.label);
       }
       ctx.restore();
-    }, { no_undo: true });
+      commitBitmap(tex);
+    }
+  } catch (err) {
+    Undo.cancelEdit(true);
+    throw err;
   }
-  Undo.finishEdit('MCP: Paint faces');
+  Undo.finishEdit('MCP: Paint faces', { textures, bitmap: true });
   UVEditor.vue?.updateTextureCanvas?.();
   return {
     painted: painted.length,
     faces: painted.slice(0, 80),
     skipped: skipped.length ? skipped : undefined,
+    layers_created: layersCreated.length ? layersCreated : undefined,
     note: 'Faces sharing UV rects (texture reuse) are painted together — check with get_texture.',
   };
 });
@@ -852,23 +896,45 @@ register('resize_texture', (params) => {
   const width = clampInt(params.width, 1, 4096);
   const height = clampInt(params.height, 1, 4096);
   Undo.initEdit({ textures: [texture], bitmap: true });
-  const old = document.createElement('canvas');
-  old.width = texture.canvas.width;
-  old.height = texture.canvas.height;
-  old.getContext('2d')!.drawImage(texture.canvas, 0, 0);
-  texture.edit((canvas: HTMLCanvasElement, env: any) => {
-    canvas.width = width;
-    canvas.height = height;
-    const ctx = env.ctx as CanvasRenderingContext2D;
-    ctx.imageSmoothingEnabled = false;
-    if (params.stretch !== false) {
-      ctx.drawImage(old, 0, 0, width, height);
-    } else {
-      ctx.drawImage(old, 0, 0);
+  const stretch = params.stretch !== false;
+  if (texture.layers_enabled) {
+    // texture.edit() would only resize the ACTIVE layer; scale every pixel
+    // layer (and its offset) so the composite keeps its arrangement.
+    const sx = width / texture.width, sy = height / texture.height;
+    for (const layer of texture.layers) {
+      if (layer.type === 'layer_group' || !stretch) continue;
+      const copy = document.createElement('canvas');
+      copy.width = layer.width;
+      copy.height = layer.height;
+      copy.getContext('2d')!.drawImage(layer.canvas, 0, 0);
+      layer.canvas.width = Math.max(1, Math.round(copy.width * sx));
+      layer.canvas.height = Math.max(1, Math.round(copy.height * sy));
+      layer.ctx.imageSmoothingEnabled = false;
+      layer.ctx.drawImage(copy, 0, 0, layer.canvas.width, layer.canvas.height);
+      layer.offset.replace([Math.round(layer.offset[0] * sx), Math.round(layer.offset[1] * sy)]);
     }
-  }, { no_undo: true });
-  texture.width = width;
-  texture.height = height;
+    texture.width = width;
+    texture.height = height;
+    commitBitmap(texture);
+  } else {
+    const old = document.createElement('canvas');
+    old.width = texture.canvas.width;
+    old.height = texture.canvas.height;
+    old.getContext('2d')!.drawImage(texture.canvas, 0, 0);
+    texture.edit((canvas: HTMLCanvasElement, env: any) => {
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = env.ctx as CanvasRenderingContext2D;
+      ctx.imageSmoothingEnabled = false;
+      if (stretch) {
+        ctx.drawImage(old, 0, 0, width, height);
+      } else {
+        ctx.drawImage(old, 0, 0);
+      }
+    }, { no_undo: true });
+    texture.width = width;
+    texture.height = height;
+  }
   if (Format.per_texture_uv_size && params.update_uv_size) {
     texture.uv_width = width;
     texture.uv_height = height;

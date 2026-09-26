@@ -6,9 +6,12 @@ import './handlers/symmetry';
 import './handlers/elements';
 import './handlers/geometry';
 import './handlers/textures';
+import './handlers/layers';
 import './handlers/uv';
 import './handlers/animation';
+import './handlers/rigging';
 import './handlers/camera';
+import './handlers/scene';
 import './handlers/io';
 import './handlers/misc';
 import { connect, shutdown, restart, connectionState } from './socket';
@@ -25,7 +28,7 @@ Plugin.register('blockbench_mcp', {
   author: 'BlockBenchMCP',
   description: 'Lets AI assistants control Blockbench through the Model Context Protocol: modeling, texturing, UV, rigged & group animations, rendering and export.',
   icon: 'hub',
-  version: '1.2.0',
+  version: '1.4.0',
   variant: 'desktop',
   min_version: '5.0.0',
   tags: ['Interface', 'MCP'],

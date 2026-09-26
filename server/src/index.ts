@@ -8,7 +8,7 @@ import { registerTools } from './tools';
 
 const server = new McpServer({
   name: 'blockbench',
-  version: '1.3.0',
+  version: '1.4.0',
 }, {
   instructions: [
     'Blockbench modeling conventions (Minecraft-style):',
@@ -23,6 +23,7 @@ const server = new McpServer({
     'File paths: never ask the user where to save. get_status returns "paths" (home, desktop, temp, separator) and get_project_info adds the folder they last saved each file type to plus recent project paths — build the absolute paths save_project / export_model / eval_code(result_file) need from those.',
     'eval_code must NOT require() Node modules (fs, os, process, child_process, net, https, shell...). Blockbench gates them behind a synchronous native permission modal that freezes the whole app and is invisible while the window is minimised; such calls are refused before the code runs. Use the paths above, Blockbench.writeFile / Blockbench.read, and the PathModule global instead. Top-level `return` and `await` work in eval_code — no IIFE needed.',
     'To read a single face\'s pixels, crop with get_texture {element, face} instead of writing canvas code: it scales that UV rect up to fill max_size.',
+    'Blockbench 5.2 features (get_status → "features" says which exist): texture layers & layer groups (texture_layers; paint_texture/paint_faces "layer" keeps shading or details on their own layer), IK with poles (add_ik_controllers: always pass "source"; pole_offset [0,0,-8] bends knees forward; animate the controller\'s position; bake_ik_animation before a Bedrock/Java export), movable reference models (preview_models + capture_screenshot include_reference_models for scale checks), 3D plane reference images (reference_images — for the user, not visible in renders), icosphere/octahedron/dodecahedron primitives, skin templates incl. "cushion" (create_project format "skin" + skin_model), Molang variable placeholders so variable-driven animations preview correctly (variable_placeholders), Java 26.3 shade_direction_override.',
   ].join('\n'),
 });
 

@@ -32,6 +32,8 @@ export interface ScreenshotOptions {
   resolution?: number | [number, number];
   shading?: boolean;
   background?: string;
+  /** Frame enabled reference models (player, crafting table...) along with the model. */
+  include_reference_models?: boolean;
 }
 
 export interface ScreenshotResult {
@@ -70,7 +72,7 @@ function getOffscreenRenderer(width: number, height: number): any {
 }
 
 /** World bounds of all visible cubes/meshes (posed if in animate mode). */
-export function modelBounds(): { center: any; radius: number; box: any } {
+export function modelBounds(includeReferenceModels = false): { center: any; radius: number; box: any } {
   getScene().updateMatrixWorld(true);
   const box = new THREE.Box3();
   let any = false;
@@ -79,6 +81,13 @@ export function modelBounds(): { center: any; radius: number; box: any } {
     if (!(el instanceof Cube) && !(el instanceof Mesh)) continue;
     box.expandByObject(el.mesh);
     any = true;
+  }
+  if (includeReferenceModels && typeof PreviewModel !== 'undefined') {
+    for (const model of PreviewModel.getActiveModels()) {
+      if (model.internal || model.model_3d.visible === false) continue;
+      box.expandByObject(model.model_3d);
+      any = true;
+    }
   }
   if (!any) {
     box.set(new THREE.Vector3(-8, 0, -8), new THREE.Vector3(8, 16, 8));
@@ -148,7 +157,7 @@ function buildCamera(options: ScreenshotOptions, aspect: number): any {
   }
 
   const { dir, ortho } = presetDirection(angle);
-  const { center, radius } = modelBounds();
+  const { center, radius } = modelBounds(options.include_reference_models === true);
   const up = Math.abs(dir.y) > 0.99
     ? new THREE.Vector3(0, 0, dir.y > 0 ? -1 : 1) // top/bottom: north points up in the image
     : new THREE.Vector3(0, 1, 0);
@@ -337,7 +346,7 @@ register('capture_multi_view', async (params) => {
   const images: string[] = [];
   let minCoverage: number | undefined;
   for (const angle of views) {
-    const shot = await takeScreenshotDetailed({ angle, resolution, background: params?.background });
+    const shot = await takeScreenshotDetailed({ angle, resolution, background: params?.background, include_reference_models: params?.include_reference_models });
     images.push(shot.image);
     if (shot.coverage !== undefined) minCoverage = minCoverage === undefined ? shot.coverage : Math.min(minCoverage, shot.coverage);
   }

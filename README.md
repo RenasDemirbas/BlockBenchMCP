@@ -2,7 +2,7 @@
 
 Claude'un Blockbench'i uçtan uca kullanmasını sağlayan tam kapsamlı bir MCP (Model Context Protocol) sunucusu: modelleme, doku/boyama, UV, **kemik (rig) animasyonları ve grup-bazlı animasyonlar**, item display ayarları, ekran görüntüsüyle görsel geri bildirim ve tüm formatlara export.
 
-Hedef sürüm: **Blockbench 5.1.4+** · İstemci: **Claude Desktop (Windows)**
+Hedef sürüm: **Blockbench 5.2+** (5.1.4+ da çalışır; 5.2'ye özgü araçlar orada net bir "5.2 gerekir" hatası verir) · İstemci: **Claude Desktop (Windows)**
 
 ## Mimari
 
@@ -55,15 +55,17 @@ Claude Desktop'ı **tamamen** yeniden başlat (sistem tepsisinden çıkış yap)
 
 Ayrıca **Cowork / kod oturumları** için kullanıcı kapsamında kayıt yapıldı (`claude mcp add --scope user blockbench`) — yani hem klasik sohbet hem kod oturumları MCP'yi görür. İki yüzey aynı anda çalışırsa sunucu örnekleri çakışmaz: portu ilk alan "hub" olur, diğerleri komutlarını hub üzerinden aktarır.
 
-## Araçlar (63)
+## Araçlar (70)
 
 | Alan | Araçlar |
 |---|---|
-| Proje | `get_status`, `list_formats`, `create_project`, `get_project_info`, `set_project_settings`, `open_project`, `save_project`, `select_project_tab`, `close_project` |
-| Geometri | `add_groups` (kemikler!), `add_cubes`, `add_meshes`, `add_mesh_primitive`, `list_outline`, `get_element`, `update_elements`, `delete_elements`, `duplicate_elements`, `select_elements` |
-| Doku | `create_texture`, `generate_texture_template`, `list_textures`, `get_texture`, `import_texture`, `apply_texture`, `paint_texture`, `resize_texture`, `set_texture_resolution` |
+| Proje | `get_status`, `list_formats`, `create_project` (skin şablonları), `get_project_info`, `set_project_settings`, `open_project`, `save_project`, `select_project_tab`, `close_project` |
+| Geometri | `add_groups` (kemikler!), `add_cubes`, `add_meshes`, `add_mesh_primitive`, `add_planes`, `add_locators`, `add_bounding_boxes`, `list_outline`, `get_element`, `update_elements`, `delete_elements`, `duplicate_elements`, `select_elements` |
+| Doku | `create_texture`, `generate_texture_template`, `list_textures`, `get_texture`, `import_texture`, `apply_texture`, `paint_texture`, `paint_faces`, `texture_layers`, `resize_texture`, `set_texture_resolution` |
 | UV | `set_cube_uv`, `set_mesh_uv`, `auto_uv`, `inspect_uv` (eşleme teşhisi) |
-| Animasyon | `create_animation`, `list_animations`, `get_animation`, `update_animation`, `delete_animation`, `set_keyframes` (Molang destekli), `edit_keyframes`, `add_effect_keyframes`, `apply_animation_preset`, `preview_animation`, `render_animation` |
+| Animasyon | `create_animation`, `list_animations`, `get_animation`, `update_animation`, `delete_animation`, `set_keyframes` (Molang destekli), `edit_keyframes`, `mirror_keyframes`, `add_effect_keyframes`, `apply_animation_preset`, `variable_placeholders`, `preview_animation`, `render_animation` |
+| IK | `add_ik_controllers` (pole destekli), `bake_ik_animation` |
+| Sahne | `preview_models` (referans modeller), `reference_images` (3D plane dahil) |
 | Görüntü | `capture_screenshot`, `capture_multi_view` |
 | Display | `set_display_transforms`, `get_display_transforms` |
 | I/O | `export_model` (bbmodel/geo.json/java/gltf/glb/obj/fbx/dae/stl/jem), `export_animations`, `import_model`, `get_model_json` |
@@ -117,6 +119,40 @@ Ayrıca **Cowork / kod oturumları** için kullanıcı kapsamında kayıt yapıl
   sadece o UV bölgesi `max_size`'a kadar **büyütülerek** döner; sonuçta piksel bölgesi ve eşleşen
   yüzlerin listesi de var. Artık `eval_code` ile elle canvas crop yazmaya gerek yok.
 
+## Blockbench 5.2 entegrasyonu (v1.4)
+
+`get_status` → `features` bu kurulumda hangi 5.2 yeteneklerinin olduğunu söyler.
+
+- **Katmanlar ve katman grupları** — `texture_layers`: listele, `add_layer`, `add_group` (5.2),
+  `update` (opaklık 0-1, blend mode, görünürlük, gruba taşıma, sıra), `merge_down`, `ungroup`, `disable`
+  (düzleştir). `paint_texture` / `paint_faces` → **`layer`**: o katmana boyar, yoksa oluşturur. Gölgeyi
+  ayrı katmana boya, sonra `multiply` + %50 yap. `get_texture` → `layer`: tek katmanı gösterir.
+  Düzeltme: boyama artık katman **offset**'ini hesaba katıyor (önceden offset'li katmanda kayıyordu) ve
+  `resize_texture` katmanlı dokuda tüm katmanları ölçekliyor.
+- **IK + pole** — `add_ik_controllers`: `target` (ayak/el) + `source` (uyluk/üst kol) zinciri için null
+  object kontrolcü; `pole_offset: [0,0,-8]` dizi öne büken pole'u otomatik kurar. Kontrolcünün `position`
+  kanalı `set_keyframes` ile anime edilir. 5.2.1+'da kontrolcü yalnızca keyframe'i olan animasyonlarda
+  çalışır → `animations` nötr keyframe ekler. `bake_ik_animation`: IK'yı Bedrock/Java export'u için
+  rotasyon keyframe'lerine çevirir. `update_elements` null object'lerde `ik_target/ik_source/ik_pole/
+  lock_ik_target_rotation` düzenler; ters zincir açıklamalı hata verir.
+- **Hareketli referans modeller** — `preview_models`: oyuncu, çalışma masası (5.2) vb. aç/kapat, taşı,
+  döndür, ölçekle (yeniden başlatmada hatırlanır). Ekran görüntülerinde görünürler;
+  `capture_screenshot` → `include_reference_models: true` kadrajı onlara da genişletir.
+- **3D referans görseller** — `reference_images`: `view_mode: "plane"` ile görsel sahnede bir panel olur
+  (`plane_position`, `plane_rotation`, `plane_size` model birimi). Kullanıcı içindir; ekran görüntüsünde çıkmaz.
+- **Yeni mesh primitive'leri** — `add_mesh_primitive`: `icosphere`, `octahedron`, `dodecahedron` +
+  `detail` (0-4). Gerçek çap kullanılır ve y=0'a oturur (Blockbench diyaloğu çapı yarıçap olarak veriyor).
+- **Java 26.3 shade direction override** — `add_cubes` / `update_elements` → `shade_direction_override`;
+  `set_project_settings` → `java_block_version: "26.3"`.
+- **Skin şablonları** — `create_project {format: "skin", skin_model: "cushion"}` (5.2'nin yeni cushion'ı,
+  steve, alex ve tüm moblar); bilinmeyen id tam listeyi döner.
+- **Molang değişken yer tutucuları** — `variable_placeholders`: value/slider/toggle/impulse satırları
+  (5.2'nin Create Variable Placeholder söz dizimi) ve slider değerleri; Molang'lı animasyonlar önizlemede
+  gerçekten hareket eder.
+- **Diğer** — generic formatta `add_bounding_boxes` (collision/hitbox); display slotları `embedded`,
+  `on_shelf`; bedrock_block'ta yeni slot oyun varsayılanlarıyla başlar; glTF export `merge_armature`
+  seçeneği; efekt keyframe `file` yolları .bbmodel'e göreli olabilir.
+
 ## Önemli kavramlar
 
 - **Gruplar = kemikler.** Blockbench'te animasyon gruplara uygulanır. Rigli model = derin grup hiyerarşisi; blok-bazlı animasyon = küp kümelerini saran yüzeysel gruplar. Her ikisi de aynı `set_keyframes` aracıyla çalışır.
@@ -131,7 +167,8 @@ node scripts/e2e-test.mjs     # Gerçek Blockbench ile tam senaryo (Blockbench a
 node scripts/e2e-pro-test.mjs # v1.1 araçları (validate/query/mirror/paint) — gerçek Blockbench
 node scripts/verify-hidden-window-timers.mjs  # Pencere gizliyken timer throttling regresyonu
 node scripts/verify-paint-ops.mjs             # v1.2 boyama op'ları (toplu hedef, stops, space:world, strands)
-node scripts/verify-field-fixes.mjs           # v1.3 saha düzeltmeleri (require koruması, yollar, snap, kırpma)
+node scripts/verify-field-fixes.mjs           # v1.3 saha düzeltmeleri (açık bir proje gerekir)
+node scripts/verify-v52-features.mjs          # v1.4 Blockbench 5.2 entegrasyonu (kendi projelerini açıp kapatır)
 ```
 
 Yeni bir aracı/parametreyi **oturum yeniden başlatmadan** denemek için (açık bir sohbetin araç listesi

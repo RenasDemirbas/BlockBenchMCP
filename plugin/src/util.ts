@@ -159,6 +159,7 @@ export function describeNode(node: any, deep = false): any {
     base.origin = node.origin.slice();
     base.rotation = node.rotation.slice();
     if (node.inflate) base.inflate = node.inflate;
+    if (node.shade_direction_override) base.shade_direction_override = node.shade_direction_override;
     base.box_uv = node.box_uv;
     if (node.box_uv) base.uv_offset = node.uv_offset.slice();
     if (node.visibility === false) base.visibility = false;
@@ -186,11 +187,46 @@ export function describeNode(node: any, deep = false): any {
         base.faces[fkey] = { vertices: face.vertices.slice(), uv, texture: face.getTexture()?.name ?? face.texture };
       }
     }
+  } else if (typeof BoundingBox !== 'undefined' && node instanceof BoundingBox) {
+    base.from = node.from.slice();
+    base.to = node.to.slice();
+    if (node.function?.length) base.function = node.function.slice();
   } else {
     if (node.position) base.position = node.position.slice?.() ?? node.position;
     if (node.rotation) base.rotation = node.rotation.slice?.() ?? node.rotation;
+    if (node.type === 'null_object') {
+      // IK controller wiring, by name so it reads without a uuid lookup.
+      if (node.ik_target) base.ik_target = nodeLabel(node.ik_target);
+      if (node.ik_source) base.ik_source = nodeLabel(node.ik_source);
+      if (node.ik_pole) base.ik_pole = nodeLabel(node.ik_pole);
+      if (node.lock_ik_target_rotation) base.lock_ik_target_rotation = true;
+    }
   }
   return base;
+}
+
+/** Name of the node behind a uuid reference, or the raw uuid if it is gone. */
+export function nodeLabel(uuid: string): string {
+  const node = OutlinerNode.uuids[uuid];
+  return node ? node.name : `${uuid} (missing)`;
+}
+
+/**
+ * Which Blockbench 5.2 capabilities this app instance actually has. Tools that
+ * depend on them check the same flags, so a 5.1 install gets a clear
+ * "needs 5.2" error instead of a stack trace.
+ */
+export function featureSupport(): Record<string, boolean> {
+  const has = (fn: () => any) => { try { return !!fn(); } catch { return false; } };
+  return {
+    texture_layer_groups: has(() => typeof TextureLayerGroup !== 'undefined'),
+    ik_poles: has(() => NullObject.properties.ik_pole),
+    movable_reference_models: has(() => typeof PreviewModel !== 'undefined' && StateMemory.preview_model_customization),
+    reference_image_planes: has(() => ReferenceImage.properties.plane_position),
+    shade_direction_override: has(() => Cube.properties.shade_direction_override),
+    generic_bounding_boxes: has(() => Formats.free?.bounding_boxes),
+    gltf_merge_armature: has(() => Codecs.gltf.export_options?.merge_armature),
+  };
 }
 
 export function describeTexture(tex: any): any {
@@ -207,6 +243,10 @@ export function describeTexture(tex: any): any {
     render_mode: tex.render_mode,
     pbr_channel: tex.pbr_channel !== 'color' ? tex.pbr_channel : undefined,
     group: tex.group || undefined,
+    // Painting lands on ONE layer of a layered texture — worth knowing up front.
+    layers: tex.layers_enabled
+      ? { count: tex.layers.filter((l: any) => l.type !== 'layer_group').length, groups: tex.layers.filter((l: any) => l.type === 'layer_group').length, active: tex.getActiveLayer?.()?.name }
+      : undefined,
   };
 }
 

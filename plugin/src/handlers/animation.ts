@@ -387,6 +387,95 @@ register('add_effect_keyframes', (params) => {
   return { animation: anim.name, added: params.effects.length };
 });
 
+// ─────────────────────── variable placeholders ───────────────────────
+// Molang variables an animation reads (variable.attack_time, query.is_sneaking…)
+// have no value in Blockbench unless the "Variable Placeholders" panel defines
+// one — so Molang-driven motion previews and renders as if they were 0.
+
+function placeholderPanel(): any {
+  const panels = (window as any).Panels || Interface?.Panels;
+  return panels?.variable_placeholders?.inside_vue ?? null;
+}
+
+/** Same line parsing Blockbench applies when the panel text changes. */
+function processPlaceholderText(text: string) {
+  const lines: Record<string, string> = {};
+  for (const line of text.split('\n')) {
+    let [key, val] = line.split(/=\s*(.+)/);
+    if (val === undefined) continue;
+    key = key.replace(/[\s;]/g, '')
+      .replace(/^v\./, 'variable.').replace(/^q\./, 'query.').replace(/^t\./, 'temp.').replace(/^c\./, 'context.');
+    lines[key] = val.trim();
+  }
+  Animator.global_variable_lines = lines;
+}
+
+function placeholderLine(def: any): string {
+  const variable = def.variable;
+  if (!variable || !/^[\w.]+$/.test(variable)) fail(`Placeholder needs a "variable" like "variable.attack_time" or "query.is_sneaking", got ${JSON.stringify(variable)}.`);
+  const type = def.type || 'value';
+  const id = def.name || variable.replace(/^(variable|query|temp|context|v|q|t|c)\./, '');
+  if (type === 'value') {
+    if (def.value === undefined) fail(`Placeholder "${variable}" of type "value" needs a "value" (number or Molang).`);
+    return `${variable} = ${def.value}`;
+  }
+  if (type === 'slider') {
+    const args = [`'${id}'`];
+    if (def.step != null || def.range) args.push(String(def.step ?? 1));
+    if (def.range) args.push(String(def.range[0]), String(def.range[1]));
+    return `${variable} = slider(${args.join(', ')})`;
+  }
+  if (type === 'toggle') return `${variable} = toggle('${id}')`;
+  if (type === 'impulse') return `${variable} = impulse('${id}'${def.duration != null ? `, ${def.duration}` : ''})`;
+  fail(`Unknown placeholder type "${type}". Valid: value, slider, toggle, impulse.`);
+}
+
+register('variable_placeholders', (params) => {
+  requireProject();
+  const vue = placeholderPanel();
+  let text: string = params.text !== undefined ? String(params.text) : (Project.variable_placeholders || '');
+  const added: string[] = [];
+  for (const def of params.add || []) {
+    const line = placeholderLine(def);
+    // Replace an existing definition of the same variable rather than stacking a second one.
+    const re = new RegExp(`^\\s*${def.variable.replace(/\./g, '\\.')}\\s*=.*$`, 'm');
+    text = re.test(text) ? text.replace(re, line) : (text.replace(/[\n\s]+$/, '') + (text.trim() ? '\n' : '') + line);
+    added.push(line);
+  }
+  const changedText = text !== (Project.variable_placeholders || '');
+  if (changedText) {
+    Project.variable_placeholders = text;
+    processPlaceholderText(text);
+    if (vue) {
+      vue.text = text;              // the panel's own watcher re-syncs later; make it sync now
+      vue.updateButtons();
+      Project.variable_placeholder_buttons?.replace?.(vue.buttons);
+    }
+  }
+  const unknown: string[] = [];
+  if (params.values && typeof params.values === 'object') {
+    if (!vue) fail('The Variable Placeholders panel is not available, so slider/toggle values cannot be set.');
+    for (const id in params.values) {
+      const button = vue.buttons.find((b: any) => b.id === id);
+      if (!button) { unknown.push(id); continue; }
+      const v = Number(params.values[id]);
+      button.value = button.type === 'toggle' ? (v ? 1 : 0) : Math.max(button.min ?? -Infinity, Math.min(button.max ?? Infinity, v));
+    }
+    Project.variable_placeholder_buttons?.replace?.(vue.buttons);
+    if (unknown.length) fail(`No slider/toggle/impulse named ${unknown.map((u) => `"${u}"`).join(', ')}. Defined: ${vue.buttons.map((b: any) => b.id).join(', ') || 'none'}.`);
+  }
+  // Cached Molang results would keep the old values alive.
+  try { Animator.MolangParser.resetVariables?.(); } catch {}
+  if (Modes.animate) Animator.preview();
+  Project.saved = false;
+  return {
+    text,
+    added: added.length ? added : undefined,
+    buttons: vue ? vue.buttons.map((b: any) => ({ id: b.id, type: b.type, variable: b.variable, value: b.value, min: b.min, max: b.max, step: b.step })) : undefined,
+    note: 'Placeholders only drive Blockbench\'s preview (and so preview_animation / render_animation); they are saved in the .bbmodel, not exported to the game.',
+  };
+});
+
 register('apply_animation_preset', (params) => {
   requireAnimationSupport();
   const presets = Animator.animation_presets;

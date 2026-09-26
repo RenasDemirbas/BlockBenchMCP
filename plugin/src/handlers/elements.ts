@@ -20,6 +20,50 @@ function applyFaceData(cube: any, facesParam: any) {
   }
 }
 
+const SHADE_DIRECTIONS = ['', 'north', 'south', 'east', 'west', 'up', 'down'];
+
+/**
+ * Java 26.3+ replaced the boolean "shade" with a per-cube light direction
+ * (Blockbench 5.2). It only exists on java_block projects targeting 26.3.
+ */
+function checkShadeOverride(value: string): string {
+  if (!Cube.properties?.shade_direction_override) fail('shade_direction_override needs Blockbench 5.2 or newer.');
+  if (!SHADE_DIRECTIONS.includes(value)) fail(`shade_direction_override must be one of: ${SHADE_DIRECTIONS.map((d) => d || '"" (none)').join(', ')}.`);
+  if (value && !Format.java_cube_shade_direction_override) {
+    fail(`shade_direction_override is a Minecraft Java 26.3+ block model feature. ${Format.id === 'java_block' ? 'Raise the project first: set_project_settings {"java_block_version": "26.3"}.' : `The current format is "${Format.id}"; it only applies to java_block.`}`);
+  }
+  return value;
+}
+
+/** IK wiring on a null object: names → uuids, with the same rules Blockbench's menus apply. */
+export function applyIkFields(nullObject: any, def: any) {
+  const ref = (id: any, label: string, allowed: (n: any) => boolean, kinds: string) => {
+    if (id === null || id === '') return '';
+    const node = resolveNode(id);
+    if (node === nullObject) fail(`${label}: a null object cannot reference itself.`);
+    if (!allowed(node)) fail(`${label}: "${node.name}" is a ${node.type}; expected ${kinds}.`);
+    return node.uuid;
+  };
+  const isBone = (n: any) => n instanceof Group || (typeof ArmatureBone !== 'undefined' && n instanceof ArmatureBone);
+  if (def.ik_target !== undefined) {
+    nullObject.ik_target = ref(def.ik_target, 'ik_target', (n) => isBone(n) || n instanceof Locator, 'a bone (group) or locator — the END of the chain');
+  }
+  if (def.ik_source !== undefined) {
+    nullObject.ik_source = ref(def.ik_source, 'ik_source', isBone, 'a bone (group) — the START of the chain');
+  }
+  if (def.ik_pole !== undefined) {
+    if (!NullObject.properties?.ik_pole) fail('ik_pole needs Blockbench 5.2 or newer.');
+    nullObject.ik_pole = ref(def.ik_pole, 'ik_pole', (n) => n instanceof Group || n instanceof Locator || n instanceof NullObject, 'a locator, null object or group');
+  }
+  if (def.lock_ik_target_rotation !== undefined) nullObject.lock_ik_target_rotation = !!def.lock_ik_target_rotation;
+  // Blockbench's solver silently does nothing on a broken chain — say why instead.
+  const target = nullObject.ik_target && OutlinerNode.uuids[nullObject.ik_target];
+  const source = nullObject.ik_source ? OutlinerNode.uuids[nullObject.ik_source] : nullObject.parent;
+  if (target && source && source !== 'root' && !target.isChildOf(source)) {
+    fail(`IK chain is broken: target "${target.name}" is not inside ${nullObject.ik_source ? `ik_source "${source.name}"` : `the null object's parent "${source.name}"`}. The chain runs from the source down to the target.`);
+  }
+}
+
 register('add_groups', (params) => {
   requireProject();
   if (!Array.isArray(params.groups) || !params.groups.length) fail('Pass a "groups" array with at least one group definition.');
@@ -79,6 +123,7 @@ register('add_cubes', (params) => {
       if (def.uv_offset) data.uv_offset = def.uv_offset.slice();
       if (def.color != null) data.color = def.color;
       if (def.rescale != null) data.rescale = def.rescale;
+      if (def.shade_direction_override != null) data.shade_direction_override = checkShadeOverride(def.shade_direction_override);
       const cube = new Cube(data).init();
       if (parent !== 'root') cube.addTo(parent);
       const tex = def.texture !== undefined
@@ -167,7 +212,9 @@ register('add_meshes', (params) => {
   return { created: created.map((m) => ({ name: m.name, uuid: m.uuid, vertices: Object.keys(m.vertices).length, faces: Object.keys(m.faces).length })) };
 });
 
-/** Generate primitive mesh geometry (sphere, cylinder, cone, torus, plane, pyramid). */
+const HEDRONS = ['icosphere', 'octahedron', 'dodecahedron'];
+
+/** Generate primitive mesh geometry (sphere, cylinder, cone, torus, plane, pyramid, 5.2 polyhedra). */
 register('add_mesh_primitive', (params) => {
   requireProject();
   if (!Format.meshes) fail(`The current format "${Format.id}" does not support meshes. Use the "free" format, or approximate the shape with cubes.`);
@@ -257,8 +304,35 @@ register('add_mesh_primitive', (params) => {
         faces.push({ vertices: [grid[i][j], grid[i2][j], grid[i2][j2], grid[i][j2]] });
       }
     }
+  } else if (HEDRONS.includes(shape)) {
+    // Blockbench 5.2's polyhedra, built from THREE's generators the same way
+    // its Add Primitive dialog does — but with a true radius (the dialog passes
+    // the diameter as the radius) and resting on the ground like our sphere.
+    const maxDetail = 4;
+    const detail = Math.max(0, Math.min(maxDetail, Math.round(params.detail ?? (shape === 'icosphere' ? 1 : 0))));
+    const Geometry = shape === 'octahedron' ? THREE.OctahedronGeometry
+      : shape === 'dodecahedron' ? THREE.DodecahedronGeometry
+        : THREE.IcosahedronGeometry;
+    const geometry = new Geometry(r, detail);
+    const pos = geometry.attributes.position;
+    let minY = Infinity;
+    for (let i = 0; i < pos.count; i++) minY = Math.min(minY, pos.getY(i));
+    // Non-indexed triangle soup → shared vertices, so the mesh stays connected.
+    const byKey = new Map<string, string>();
+    const vertexAt = (i: number): string => {
+      const x = pos.getX(i), y = pos.getY(i) - minY, z = pos.getZ(i);
+      const key = `${x.toFixed(4)},${y.toFixed(4)},${z.toFixed(4)}`;
+      let vkey = byKey.get(key);
+      if (!vkey) { vkey = V(x, y, z); byKey.set(key, vkey); }
+      return vkey;
+    };
+    for (let i = 0; i + 2 < pos.count; i += 3) {
+      const tri = [vertexAt(i), vertexAt(i + 1), vertexAt(i + 2)];
+      if (new Set(tri).size === 3) faces.push({ vertices: tri });
+    }
+    geometry.dispose?.();
   } else {
-    fail(`Unknown primitive shape "${shape}". Valid: plane, pyramid, cylinder, cone, sphere, torus.`);
+    fail(`Unknown primitive shape "${shape}". Valid: plane, pyramid, cylinder, cone, sphere, torus, icosphere, octahedron, dodecahedron.`);
   }
 
   const result = (getHandlerResult('add_meshes', {
@@ -327,8 +401,20 @@ register('update_elements', (params) => {
       for (const key of ['name', 'origin', 'rotation', 'from', 'to', 'inflate', 'visibility', 'autouv', 'shade', 'mirror_uv', 'uv_offset', 'color', 'box_uv', 'rescale', 'bedrock_binding']) {
         if (def[key] !== undefined) data[key] = def[key];
       }
+      if (def.shade_direction_override !== undefined) {
+        if (!(node instanceof Cube)) fail(`shade_direction_override applies to cubes; "${node.name}" is a ${node.type}.`);
+        data.shade_direction_override = checkShadeOverride(def.shade_direction_override ?? '');
+      }
+      if (def.function !== undefined) {
+        if (typeof BoundingBox === 'undefined' || !(node instanceof BoundingBox)) fail(`"function" applies to bounding boxes; "${node.name}" is a ${node.type}.`);
+        data.function = def.function.slice();
+      }
       if (Object.keys(data).length) node.extend(data);
       if (def.position !== undefined && node.position) node.position.replace(def.position);
+      if (['ik_target', 'ik_source', 'ik_pole', 'lock_ik_target_rotation'].some((k) => def[k] !== undefined)) {
+        if (node.type !== 'null_object') fail(`IK settings (ik_target/ik_source/ik_pole/lock_ik_target_rotation) belong to null objects; "${node.name}" is a ${node.type}. Create one with add_ik_controllers.`);
+        applyIkFields(node, def);
+      }
       if (def.faces && node instanceof Cube) applyFaceData(node, def.faces);
       if (def.vertices && node instanceof Mesh) {
         for (const vkey in def.vertices) {
@@ -562,6 +648,40 @@ register('add_locators', (params) => {
   refreshElements(created);
   Undo.finishEdit('MCP: Add locators', { outliner: true, elements: created, selection: true });
   return { created: created.map((l) => ({ name: l.name, uuid: l.uuid, parent: l.parent === 'root' ? 'root' : l.parent.name })) };
+});
+
+register('add_bounding_boxes', (params) => {
+  requireProject();
+  if (typeof BoundingBox === 'undefined') fail('Bounding boxes need Blockbench 5.1 or newer.');
+  if (!Format.bounding_boxes) {
+    fail(`Format "${Format.id}" has no bounding boxes. They exist in the bedrock formats and (since Blockbench 5.2) the generic "free" format.`);
+  }
+  if (!Array.isArray(params.boxes) || !params.boxes.length) fail('Pass "boxes": [{name, from: [x,y,z], to: [x,y,z], function?: ["collision"|"hitbox"], parent?}].');
+  Undo.initEdit({ outliner: true, elements: [], selection: true });
+  const created: any[] = [];
+  try {
+    for (const def of params.boxes) {
+      const from = vec3(def.from), to = vec3(def.to);
+      if (!from || !to) fail(`Bounding box "${def.name || '?'}" needs "from" and "to".`);
+      const fn = def.function ?? [];
+      for (const f of fn) if (!['collision', 'hitbox'].includes(f)) fail(`Bounding box function "${f}" is invalid. Valid: collision, hitbox.`);
+      const parent = resolveParent(def.parent);
+      const box = new BoundingBox({ name: def.name || 'bounding_box', from, to, function: fn.slice() });
+      if (def.color != null) box.color = def.color;
+      if (parent !== 'root') box.addTo(parent);
+      box.init();
+      created.push(box);
+    }
+  } catch (err) {
+    Undo.cancelEdit(true);
+    throw err;
+  }
+  refreshElements(created, { transform: true, geometry: true });
+  Undo.finishEdit('MCP: Add bounding boxes', { outliner: true, elements: created, selection: true });
+  return {
+    created: created.map((b) => ({ name: b.name, uuid: b.uuid, from: b.from.slice(), to: b.to.slice(), function: b.function?.slice() })),
+    note: 'Bounding boxes are wireframe helpers (collision/hitbox) — they are hidden in screenshots and exported only by formats that support them.',
+  };
 });
 
 register('select_elements', (params) => {

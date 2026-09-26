@@ -6,10 +6,10 @@ const FORMAT_NOTES: Record<string, string> = {
   free: 'Generic model. Most flexible: meshes, armatures, animations, per-texture UV size. Animations are saved inside the .bbmodel only.',
   bedrock: 'Minecraft Bedrock entity (.geo.json). Cubes only, groups act as bones, animations export to .animation.json.',
   bedrock_block: 'Minecraft Bedrock block/item geometry. No animations. Has display transforms and a 30x30x30 size limit.',
-  java_block: 'Minecraft Java block/item model. Cubes only, no bone rig, rotation limited to 22.5-degree steps on one axis (per element) unless targeting 1.21.11+. Display transforms supported.',
+  java_block: 'Minecraft Java block/item model. Cubes only, no bone rig, rotation limited to 22.5-degree steps on one axis (per element) unless targeting 1.21.11+. java_block_version 26.3 adds per-cube shade_direction_override. Display transforms supported.',
   modded_entity: 'Java Edition modded entity class export (1.12-1.17 templates). Box UV, bones, animations resolved to code.',
   optifine_entity: 'OptiFine JEM entity model.',
-  skin: 'Minecraft skin editor (paint only).',
+  skin: 'Minecraft skin / entity texture editor. create_project takes "skin_model" (steve, alex, cushion, any mob...) and builds that template with a texture to paint.',
   image: '2D image editing format.',
 };
 
@@ -34,6 +34,7 @@ function formatInfo(format: any) {
       centered_grid: !!format.centered_grid,
       texture_meshes: !!format.texture_meshes,
       armature_rig: !!format.armature_rig,
+      bounding_boxes: !!format.bounding_boxes,
     },
   };
 }
@@ -42,13 +43,40 @@ register('list_formats', () => {
   return Object.keys(Formats).map((id) => formatInfo(Formats[id]));
 });
 
+/**
+ * Skin/entity templates (steve, alex, every mob, 5.2's "cushion", ...) are only
+ * reachable through the skin format's own New dialog — the preset table is
+ * module-private. Drive that dialog so the result matches File > New exactly,
+ * including the generated texture template.
+ */
+function createSkinProject(params: any) {
+  Formats.skin.new();
+  const dialog: any = Dialog.open;
+  if (!dialog || dialog.id !== 'skin') fail('The skin model dialog did not open — cannot pick a skin template.');
+  const options: Record<string, string> = dialog.form_config?.model?.options || {};
+  const model = params.skin_model || 'steve';
+  if (!options[model] || model === 'flat_texture') {
+    dialog.cancel();
+    const valid = Object.keys(options).filter((k) => k !== 'flat_texture');
+    fail(`Unknown skin_model "${model}". Available templates (${valid.length}): ${valid.join(', ')}. For a plain 2D texture use format "image".`);
+  }
+  const values: any = { model, texture_source: 'template', resolution: params.skin_resolution ?? 1, pose: params.skin_pose !== false, layer_template: false };
+  if (params.skin_edition) values.game_edition = params.skin_edition === 'bedrock' ? 'bedrock_edition' : 'java_edition';
+  if (params.skin_variant) values.variant = params.skin_variant;
+  dialog.setFormValues(values, true);
+  dialog.confirm();
+  if (!Project || Format.id !== 'skin') fail(`Creating the "${model}" skin project failed.`);
+}
+
 register('create_project', (params) => {
   const id = params.format || 'bedrock';
   const format = Formats[id];
   if (!format) {
     fail(`Unknown format "${id}". Available formats: ${Object.keys(Formats).join(', ')}`);
   }
-  newProject(format);
+  if (params.skin_model && id !== 'skin') fail('"skin_model" only applies to format "skin".');
+  if (id === 'skin') createSkinProject(params);
+  else newProject(format);
   if (params.name) {
     Project.name = params.name;
     if (Format.model_identifier) {
@@ -61,7 +89,9 @@ register('create_project', (params) => {
     uuid: Project.uuid,
     name: Project.name,
     format: Format.id,
+    skin_model: Format.id === 'skin' ? Project.skin_model : undefined,
     texture_size: [Project.texture_width, Project.texture_height],
+    bones: Format.id === 'skin' ? getAllGroups().map((g: any) => g.name) : undefined,
     format_capabilities: formatInfo(Format).capabilities,
   };
 });
@@ -94,6 +124,8 @@ register('get_project_info', () => {
       meshes: Mesh.all.length,
       groups: groups.length,
       locators: Project.elements.filter((e: any) => e.type === 'locator').length,
+      ik_controllers: Project.elements.filter((e: any) => e.type === 'null_object' && e.ik_target).length || undefined,
+      bounding_boxes: Project.elements.filter((e: any) => e.type === 'bounding_box').length || undefined,
       textures: Texture.all.length,
       animations: Animation.all.length,
     },

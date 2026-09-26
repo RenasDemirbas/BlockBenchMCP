@@ -2,9 +2,14 @@
 import { register, fail, requireProject, listCommands } from '../registry';
 import { PLUGIN_VERSION } from '../socket';
 import { timerStatus } from '../timers';
-import { systemPaths } from '../util';
+import { systemPaths, featureSupport } from '../util';
 
 const DISPLAY_SLOTS = ['thirdperson_righthand', 'thirdperson_lefthand', 'firstperson_righthand', 'firstperson_lefthand', 'ground', 'gui', 'head', 'fixed'];
+
+/** The app's own slot list — 5.2 added "embedded" and "on_shelf". */
+function displaySlots(): string[] {
+  return (typeof DisplayMode !== 'undefined' && Array.isArray(DisplayMode.slots) && DisplayMode.slots.length) ? DisplayMode.slots : DISPLAY_SLOTS;
+}
 
 register('set_display_transforms', (params) => {
   requireProject();
@@ -12,9 +17,15 @@ register('set_display_transforms', (params) => {
     fail(`Format "${Format.id}" has no display transforms. They exist in java_block and bedrock_block formats (how the item looks in hand/gui/ground).`);
   }
   const slot = params.slot;
-  if (!DISPLAY_SLOTS.includes(slot)) fail(`Invalid slot "${slot}". Valid: ${DISPLAY_SLOTS.join(', ')}`);
+  if (!displaySlots().includes(slot)) fail(`Invalid slot "${slot}". Valid: ${displaySlots().join(', ')}`);
   Undo.initEdit({ display_slots: [slot] });
-  if (!Project.display_settings[slot]) Project.display_settings[slot] = new DisplaySlot(slot);
+  if (!Project.display_settings[slot]) {
+    Project.display_settings[slot] = new DisplaySlot(slot);
+    // A fresh bedrock_block slot starts from the game's defaults (5.2), so a
+    // partial edit like "just rotate it" keeps the right scale.
+    const defaults = Format.id === 'bedrock_block' && DisplayMode.bedrock_defaults?.[slot];
+    if (defaults) Project.display_settings[slot].extend(defaults);
+  }
   const data: any = {};
   if (params.rotation) data.rotation = params.rotation;
   if (params.translation) data.translation = params.translation;
@@ -35,7 +46,7 @@ register('get_display_transforms', () => {
   requireProject();
   if (!Format.display_mode) fail(`Format "${Format.id}" has no display transforms.`);
   const out: any = {};
-  for (const slot of DISPLAY_SLOTS) {
+  for (const slot of displaySlots()) {
     const s = Project.display_settings[slot];
     if (s) out[slot] = { rotation: s.rotation.slice(), translation: s.translation.slice(), scale: s.scale.slice() };
   }
@@ -239,6 +250,7 @@ register('get_status', () => {
     open_tabs: ModelProject.all.map((p: any) => ({ uuid: p.uuid, name: p.getDisplayName(), selected: p.selected })),
     paths: systemPaths(false),
     available_commands: listCommands().length,
+    features: featureSupport(),
     timers: timerStatus(),
   };
 });
