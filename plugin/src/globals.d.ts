@@ -45,6 +45,7 @@ declare global {
   const Billboard: any;
   const Armature: any;
   const ArmatureBone: any;
+  const BoundingBox: any;
   const Collection: any;
   function getCurrentGroup(): any;
   function getAllGroups(): any[];
@@ -62,6 +63,9 @@ declare global {
 
   const Texture: any;
   const TextureLayer: any;
+  /** 5.2+: layer folders and their common base class. */
+  const TextureLayerGroup: any;
+  const TextureLayerItem: any;
   const TextureGroup: any;
   const TextureGenerator: any;
   const Painter: any;
@@ -86,6 +90,14 @@ declare global {
     constructor(id?: string);
     extend(data: any): any;
   }
+
+  /** Reference models (player, crafting table, ...) shown next to the model. */
+  const PreviewModel: any;
+  const ReferenceImage: any;
+  const ReferenceImageMode: any;
+  const Interface: any;
+  const BARS: any;
+  function updateInterfacePanels(): void;
 
   const BarItems: any;
   const MenuBar: any;

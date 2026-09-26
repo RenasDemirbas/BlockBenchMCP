@@ -39,12 +39,16 @@ const cameraSchema = z.object({
 
 const anglePresets = 'view (current viewport), initial, top, bottom, north, south, east, west, isometric_right, isometric_left, true_isometric_right, true_isometric_left';
 
+const shadeDirections = ['', 'north', 'south', 'east', 'west', 'up', 'down'] as const;
+const layerBlendModes = ['default', 'set_opacity', 'color', 'multiply', 'add', 'darken', 'lighten', 'screen', 'overlay', 'difference', 'alpha_mask'] as const;
+const layerParam = () => z.string().optional().describe('Paint into this texture LAYER (name/uuid) instead of the flattened texture. Missing layers are created on top at full texture size, and layers are enabled on the texture if needed — keep shading, details or decals on their own layer, then tune them with texture_layers (opacity, blend mode, visibility).');
+
 export function registerTools(server: McpServer) {
   // ───────────────────────────── status & project ─────────────────────────────
 
   server.registerTool('get_status', {
     title: 'Get Blockbench status',
-    description: 'Check the connection to Blockbench and get the app version, open project tabs, current project — and "paths": the user\'s home/desktop/temp folders and path separator. Call this first if other tools fail, or whenever you need an absolute path for save_project / export_model / render output (get_project_info returns more: last-used folder per file type and recent project paths).',
+    description: 'Check the connection to Blockbench and get the app version, open project tabs, current project, "features" (which Blockbench 5.2 capabilities this install has: texture layer groups, IK poles, movable reference models, 3D reference images, shade direction override, ...) — and "paths": the user\'s home/desktop/temp folders and path separator. Call this first if other tools fail, or whenever you need an absolute path for save_project / export_model / render output (get_project_info returns more: last-used folder per file type and recent project paths).',
     inputSchema: {},
     annotations: readOnly,
   }, async () => {
@@ -71,13 +75,18 @@ export function registerTools(server: McpServer) {
 
   server.registerTool('create_project', {
     title: 'Create project',
-    description: 'Create a new Blockbench project. Formats: "bedrock" (Minecraft Bedrock entity with bone animations — the usual choice for animated models), "bedrock_block" (static Bedrock block), "java_block" (Java block/item with display transforms, 22.5° rotation steps), "free" (generic: meshes + animations, most flexible), "modded_entity", "optifine_entity", "skin". Groups act as animation bones in bone-rig formats.',
+    description: 'Create a new Blockbench project. Formats: "bedrock" (Minecraft Bedrock entity with bone animations — the usual choice for animated models), "bedrock_block" (static Bedrock block), "java_block" (Java block/item with display transforms, 22.5° rotation steps), "free" (generic: meshes + animations + bounding boxes, most flexible), "modded_entity", "optifine_entity", "skin". Groups act as animation bones in bone-rig formats.\n\nSKIN / ENTITY TEMPLATES: format "skin" + "skin_model" builds a ready-made Minecraft model with its texture template to paint — steve, alex, cushion (new in 5.2), armor_stand, and every mob (cow, fox, wolf_baby, ...). An unknown id returns the full list.',
     inputSchema: {
       format: z.string().default('bedrock').describe('Format id, see list_formats'),
       name: z.string().optional().describe('Project/model name'),
       model_identifier: z.string().optional().describe('Geometry identifier (bedrock: geometry.<id>)'),
       texture_width: z.number().optional().describe('Texture UV grid width, default 16'),
       texture_height: z.number().optional().describe('Texture UV grid height, default 16'),
+      skin_model: z.string().optional().describe('format "skin" only: template id, e.g. "steve", "alex", "cushion", "fox" (default steve)'),
+      skin_variant: z.string().optional().describe('format "skin": variant of templates that have several (e.g. tropical fish patterns)'),
+      skin_edition: z.enum(['java', 'bedrock']).optional().describe('format "skin": edition for templates that differ between Java and Bedrock'),
+      skin_resolution: z.number().optional().describe('format "skin": texture resolution 16/32/64/128 (default: the template\'s own)'),
+      skin_pose: z.boolean().optional().describe('format "skin": apply the template\'s default pose (default true)'),
     },
     annotations: mutating,
   }, forward('create_project'));
@@ -100,7 +109,7 @@ export function registerTools(server: McpServer) {
       modify_uv: z.boolean().optional().describe('When resizing texture grid: scale existing UVs proportionally'),
       ambientocclusion: z.boolean().optional(),
       front_gui_light: z.boolean().optional(),
-      java_block_version: z.enum(['1.9.0', '1.21.6', '1.21.11']).optional().describe('java_block only: 1.21.11+ removes rotation limits'),
+      java_block_version: z.enum(['1.9.0', '1.21.6', '1.21.11', '26.3']).optional().describe('java_block only: 1.21.11+ removes rotation limits; 26.3+ replaces cube "shade" with shade_direction_override (Blockbench 5.2)'),
       bedrock_animation_mode: z.enum(['entity', 'attachable_first']).optional(),
     },
     annotations: mutating,
@@ -173,6 +182,7 @@ export function registerTools(server: McpServer) {
         faces: facesSchema.optional(),
         visibility: z.boolean().optional(),
         shade: z.boolean().optional(),
+        shade_direction_override: z.enum(shadeDirections).optional().describe('java_block 26.3+: light the whole cube as if every face pointed this way ("" = off). Replaces "shade" in that version.'),
         rescale: z.boolean().optional(),
         color: z.number().optional().describe('Marker color index 0-7'),
       })).min(1),
@@ -203,9 +213,9 @@ export function registerTools(server: McpServer) {
 
   server.registerTool('add_mesh_primitive', {
     title: 'Add mesh primitive',
-    description: 'Generate a primitive mesh shape ("free" format only): plane, pyramid, cylinder, cone, sphere, torus. Faster and cleaner than hand-building vertices.',
+    description: 'Generate a primitive mesh shape ("free" format only): plane, pyramid, cylinder, cone, sphere, torus, and the Blockbench 5.2 polyhedra icosphere, octahedron, dodecahedron (triangle meshes; "detail" subdivides them toward a sphere — an icosphere has evenly sized faces, unlike the UV "sphere"). Shapes rest on y=0 around the origin. Faster and cleaner than hand-building vertices.',
     inputSchema: {
-      shape: z.enum(['plane', 'pyramid', 'cylinder', 'cone', 'sphere', 'torus']),
+      shape: z.enum(['plane', 'pyramid', 'cylinder', 'cone', 'sphere', 'torus', 'icosphere', 'octahedron', 'dodecahedron']),
       name: z.string().optional(),
       parent: z.string().optional(),
       position: vec3().optional(),
@@ -214,6 +224,7 @@ export function registerTools(server: McpServer) {
       height: z.number().optional().describe('Default 16 (cylinder/cone/pyramid)'),
       sides: z.number().optional().describe('Segments, default 16'),
       minor_diameter: z.number().optional().describe('Torus tube diameter, default diameter/4'),
+      detail: z.number().optional().describe('icosphere/octahedron/dodecahedron subdivision level 0-4 (faces ×4 per level). Default 1 for icosphere (80 faces), 0 for the others (the plain solid).'),
       texture: z.string().optional(),
     },
     annotations: mutating,
@@ -272,6 +283,52 @@ export function registerTools(server: McpServer) {
     },
     annotations: mutating,
   }, forward('add_locators'));
+
+  server.registerTool('add_bounding_boxes', {
+    title: 'Add bounding boxes',
+    description: 'Create bounding boxes — wireframe collision/hitbox volumes (bedrock formats, and the generic "free" format since Blockbench 5.2). They do not render in screenshots and carry no texture. Parent them into a bone to follow it.',
+    inputSchema: {
+      boxes: z.array(z.object({
+        name: z.string().optional(),
+        from: vec3().describe('Lower corner [x, y, z]'),
+        to: vec3().describe('Upper corner [x, y, z]'),
+        function: z.array(z.enum(['collision', 'hitbox'])).optional(),
+        parent: z.string().optional().describe('Group (bone) name/uuid'),
+        color: z.number().optional().describe('Marker color index'),
+      })).min(1),
+    },
+    annotations: mutating,
+  }, forward('add_bounding_boxes'));
+
+  server.registerTool('add_ik_controllers', {
+    title: 'Add IK controllers (inverse kinematics)',
+    description: 'Rig limbs for inverse kinematics: each controller is a null object the chain\'s END bone reaches for, so a leg or arm is animated by moving ONE point instead of keyframing every joint. "target" = end bone (foot/hand), "source" = start bone (thigh/upper arm) — always pass it, otherwise the chain runs up to the top-level bone and bends the body too. The controller is placed at the target\'s pivot unless "position" is given, so the rest pose does not change.\n\nPOLES (Blockbench 5.2): a pole is a point the middle joint bends toward — without one a knee can flip sideways. Pass "pole" (existing locator/null/group) or let the tool create one: "pole_offset" is relative to the chain\'s middle joint — [0,0,-8] makes a knee bend forward (north, the way entities face), [0,0,8] makes an elbow bend back.\n\nAnimate by keyframing the controller\'s "position" channel with set_keyframes (bone = controller name). In Blockbench 5.2.1+ a controller only acts in animations where it has a keyframe — list them in "animations" to add a neutral one. Formats without IK export (bedrock, java) need bake_ik_animation first.',
+    inputSchema: {
+      controllers: z.array(z.object({
+        name: z.string().optional().describe('Controller name, default "<target>_ik"'),
+        target: z.string().describe('END of the chain: bone (group) or locator, e.g. "foot_left"'),
+        source: z.string().optional().describe('START of the chain (bone), e.g. "thigh_left" — recommended'),
+        parent: z.string().optional().describe('Group to put the controller (and auto pole) in; default root'),
+        position: vec3().optional().describe('Controller position (model units); default: the target\'s pivot'),
+        pole: z.string().optional().describe('Existing locator / null object / group to use as the pole'),
+        pole_position: vec3().optional().describe('Create a pole null object at this absolute position'),
+        pole_offset: vec3().optional().describe('Create a pole at the chain\'s middle joint + this offset, e.g. [0,0,-8] for a forward-bending knee'),
+        lock_rotation: z.boolean().optional().describe('Keep the end bone\'s world rotation (feet stay flat)'),
+        animations: z.union([z.array(z.string()), z.literal('all')]).optional().describe('Add a neutral keyframe in these animations so the controller is active there (needed in 5.2.1+)'),
+      })).min(1),
+    },
+    annotations: mutating,
+  }, forward('add_ik_controllers'));
+
+  server.registerTool('bake_ik_animation', {
+    title: 'Bake IK into keyframes',
+    description: 'Convert what the IK controllers do in one animation into plain rotation keyframes on the chain bones (sampled at the animation\'s snapping fps) — required before exporting to formats that have no IK (Bedrock .animation.json, Java). Pass detach_controllers: true to unhook the controllers afterwards so the preview shows exactly the baked motion.',
+    inputSchema: {
+      animation: z.string().optional().describe('Name/uuid (default: selected)'),
+      detach_controllers: z.boolean().optional().describe('Clear ik_target on all controllers after baking'),
+    },
+    annotations: mutating,
+  }, forward('bake_ik_animation', 60_000));
 
   server.registerTool('mirror_elements', {
     title: 'Mirror elements',
@@ -354,6 +411,12 @@ export function registerTools(server: McpServer) {
         faces: facesSchema.optional(),
         vertices: z.record(z.string(), z.union([vec3(), z.null()])).optional().describe('Mesh only: move vertices, null deletes'),
         bedrock_binding: z.string().optional(),
+        shade_direction_override: z.enum(shadeDirections).optional().describe('Cube, java_block 26.3+: fixed shading direction ("" = off)'),
+        ik_target: z.string().nullable().optional().describe('Null object (IK controller): END bone/locator of the chain; null clears'),
+        ik_source: z.string().nullable().optional().describe('Null object: START bone of the chain; null = the controller\'s parent'),
+        ik_pole: z.string().nullable().optional().describe('Null object (5.2+): locator/null object/group the middle joint bends toward; null clears'),
+        lock_ik_target_rotation: z.boolean().optional().describe('Null object: keep the end bone\'s world rotation (e.g. a foot stays flat)'),
+        function: z.array(z.enum(['collision', 'hitbox'])).optional().describe('Bounding box only: what it is used for'),
       })).min(1),
     },
     annotations: mutating,
@@ -445,9 +508,33 @@ export function registerTools(server: McpServer) {
       face: z.enum(faceKeys).optional().describe('Crop to one face of that element'),
       faces: z.union([z.array(z.enum(faceKeys)), z.literal('all')]).optional().describe('Crop to several faces (default: all faces of the element)'),
       padding: z.number().optional().describe('Extra UV units around the crop, default 0 — use 1-2 to see neighbouring pixels'),
+      layer: z.string().optional().describe('Show only this texture layer (name/uuid) instead of the composite'),
     },
     annotations: readOnly,
   }, forward('get_texture'));
+
+  server.registerTool('texture_layers', {
+    title: 'Texture layers & layer groups',
+    description: 'List and edit a texture\'s layers — Photoshop-style stacking with opacity, blend modes and (Blockbench 5.2) layer GROUPS. Without "ops" it just lists the layers (bottom → top). Ops run in order, as one undo step:\n- enable: turn layers on (the current image becomes the base layer)\n- add_layer {name, parent?, above?/below?, fill_color?, opacity?, blend_mode?, visible?}\n- add_group {name, parent?, layers?: [names to move in]} (5.2+)\n- update {layer, name?, opacity?, blend_mode?, visible?, parent? ("root" to take out of a group), offset?, above?/below?} — works on groups too (visibility/name/parent)\n- delete {layer} — a group takes its contents with it\n- merge_down {layer}, ungroup {layer} (5.2+), select {layer} (the active layer Blockbench\'s brushes use)\n- disable: flatten everything into one image\nOpacity is 0-1. Paint into a layer with paint_texture / paint_faces "layer"; view one with get_texture "layer".',
+    inputSchema: {
+      texture: z.string().optional().describe('Texture name/uuid (default: selected)'),
+      ops: z.array(z.object({
+        op: z.enum(['enable', 'disable', 'add_layer', 'add_group', 'update', 'delete', 'merge_down', 'ungroup', 'select']),
+        layer: z.string().optional().describe('Target layer/group name or uuid (update/delete/merge_down/ungroup/select)'),
+        name: z.string().optional().describe('Name for add_layer/add_group, or the new name for update'),
+        parent: z.string().nullable().optional().describe('Layer group to place the item in ("root"/null = top level)'),
+        above: z.string().optional().describe('Place directly above this layer'),
+        below: z.string().optional().describe('Place directly below this layer'),
+        opacity: z.number().optional().describe('0-1'),
+        blend_mode: z.enum(layerBlendModes).optional(),
+        visible: z.boolean().optional(),
+        fill_color: z.string().optional().describe('add_layer: fill the new layer with this CSS color (default transparent)'),
+        offset: vec2().optional().describe('update: layer position on the texture in pixels'),
+        layers: z.array(z.string()).optional().describe('add_group: layers to move into the new group'),
+      })).optional(),
+    },
+    annotations: mutating,
+  }, forward('texture_layers'));
 
   server.registerTool('import_texture', {
     title: 'Import texture file',
@@ -469,9 +556,10 @@ export function registerTools(server: McpServer) {
 
   server.registerTool('paint_texture', {
     title: 'Paint texture',
-    description: 'Draw on a texture with declarative ops (batched in one call, one undo step). Op types: "pixel" {pixels: [[x,y],...]}, "line" {from, to, thickness?}, "rect" {from, to, filled?, thickness?}, "ellipse" {center, radius: [rx,ry], filled?}, "fill" (bucket) {at, tolerance?}, "gradient" (see "stops" and "space"), "clear" {from, to}, "jagged_edge" (pixel-art fur teeth along one rect edge — mode "erase" cuts the silhouette into transparency for fur planes, mode "color" draws colored teeth), "noise" (seeded speckle of color/color2; with no target and no from/to it covers the WHOLE bitmap), "strands" (seeded fur dashes whose count and length scale with the target rect, so one op reads right on a small paw and a big flank). Every op takes "color" (CSS string) and "opacity" (0-1).\n\nTARGETING: "target": {element, face} paints one cube face; "target": {element, faces: "all" | ["north",...]} paints many, and "element" may be a GROUP (recurses into every cube in it) — one op then expands to one op per face. Targeted ops use NORMALIZED 0-1 coordinates mapped onto each face\'s UV rect; untargeted ops use absolute BITMAP pixels.\n\nSHADING ACROSS CUBES: a face-local gradient restarts on every cube, which makes a limb built from several cubes look banded. Pass "space": "world" on a gradient (with a face target) to position the stops along the MODEL\'s Y extent instead, so neighbouring cubes continue the same ramp seamlessly. For plain solid faces prefer paint_faces. Verify with get_texture, inspect_uv or capture_screenshot.',
+    description: 'Draw on a texture with declarative ops (batched in one call, one undo step). Pass "layer" to paint into a separate texture layer (created if missing). Op types: "pixel" {pixels: [[x,y],...]}, "line" {from, to, thickness?}, "rect" {from, to, filled?, thickness?}, "ellipse" {center, radius: [rx,ry], filled?}, "fill" (bucket) {at, tolerance?}, "gradient" (see "stops" and "space"), "clear" {from, to}, "jagged_edge" (pixel-art fur teeth along one rect edge — mode "erase" cuts the silhouette into transparency for fur planes, mode "color" draws colored teeth), "noise" (seeded speckle of color/color2; with no target and no from/to it covers the WHOLE bitmap), "strands" (seeded fur dashes whose count and length scale with the target rect, so one op reads right on a small paw and a big flank). Every op takes "color" (CSS string) and "opacity" (0-1).\n\nTARGETING: "target": {element, face} paints one cube face; "target": {element, faces: "all" | ["north",...]} paints many, and "element" may be a GROUP (recurses into every cube in it) — one op then expands to one op per face. Targeted ops use NORMALIZED 0-1 coordinates mapped onto each face\'s UV rect; untargeted ops use absolute BITMAP pixels.\n\nSHADING ACROSS CUBES: a face-local gradient restarts on every cube, which makes a limb built from several cubes look banded. Pass "space": "world" on a gradient (with a face target) to position the stops along the MODEL\'s Y extent instead, so neighbouring cubes continue the same ramp seamlessly. For plain solid faces prefer paint_faces. Verify with get_texture, inspect_uv or capture_screenshot.',
     inputSchema: {
       texture: z.string().optional().describe('Texture name/uuid (default: selected)'),
+      layer: layerParam(),
       ops: z.array(z.object({
         type: z.enum(['pixel', 'line', 'rect', 'ellipse', 'fill', 'gradient', 'clear', 'jagged_edge', 'noise', 'strands']),
         color: z.string().optional(),
@@ -526,6 +614,7 @@ export function registerTools(server: McpServer) {
         opacity: z.number().optional().describe('0-1, default 1 (overwrite)'),
       })).min(1),
       texture: z.string().optional().describe('Fallback texture for faces that have none assigned'),
+      layer: layerParam(),
     },
     annotations: mutating,
   }, forward('paint_faces'));
@@ -732,7 +821,7 @@ export function registerTools(server: McpServer) {
         time: z.number(),
         effect: z.string().optional().describe('Particle/sound effect id, e.g. "minecraft:campfire_smoke"'),
         locator: z.string().optional(),
-        file: z.string().optional().describe('Local file for preview'),
+        file: z.string().optional().describe('Local particle/sound file for preview. Since Blockbench 5.2 a relative path resolves against the saved .bbmodel\'s folder.'),
         script: z.string().optional().describe('Molang script (particle pre-effect / timeline)'),
       })).min(1),
     },
@@ -749,6 +838,25 @@ export function registerTools(server: McpServer) {
     },
     annotations: mutating,
   }, forward('apply_animation_preset'));
+
+  server.registerTool('variable_placeholders', {
+    title: 'Molang variable placeholders',
+    description: 'Give Molang variables a preview value so animations that read them (variable.attack_time, query.is_sneaking, query.modified_move_speed...) actually move in preview_animation / render_animation instead of evaluating to 0. Edits the Variable Placeholders panel: "add" writes lines of the four kinds Blockbench 5.2\'s Create Variable Placeholder tool knows — value (fixed number/Molang), slider (adjustable number with step/range), toggle (0/1), impulse (briefly 1). "values" then sets sliders/toggles by name. "text" replaces the whole panel. Without params it just reports the current state.',
+    inputSchema: {
+      text: z.string().optional().describe('Replace the entire placeholder text (one "variable.x = value" per line)'),
+      add: z.array(z.object({
+        variable: z.string().describe('e.g. "variable.attack_time" or "query.is_sneaking"'),
+        type: z.enum(['value', 'slider', 'toggle', 'impulse']).optional().describe('default "value"'),
+        value: z.union([z.number(), z.string()]).optional().describe('type "value": number or Molang expression'),
+        name: z.string().optional().describe('slider/toggle/impulse button name (default: the variable name)'),
+        step: z.number().optional().describe('slider step'),
+        range: vec2().optional().describe('slider [min, max]'),
+        duration: z.number().optional().describe('impulse length in seconds'),
+      })).optional().describe('Placeholders to add (an existing line for the same variable is replaced)'),
+      values: z.record(z.string(), z.number()).optional().describe('Set slider/toggle buttons by name, e.g. {"attack_time": 0.5}'),
+    },
+    annotations: mutating,
+  }, forward('variable_placeholders'));
 
   server.registerTool('preview_animation', {
     title: 'Preview animation at time',
@@ -781,9 +889,9 @@ export function registerTools(server: McpServer) {
 
   server.registerTool('set_display_transforms', {
     title: 'Set item display transforms',
-    description: 'Configure how a java_block/bedrock_block item model is displayed in each slot: gui, ground, head, firstperson/thirdperson left/right hand, fixed (item frame).',
+    description: 'Configure how a java_block/bedrock_block item model is displayed in each slot: gui, ground, head, firstperson/thirdperson left/right hand, fixed (item frame), embedded, on_shelf (shelf block). A slot that was never set starts from the game defaults on bedrock_block (Blockbench 5.2), so you can change just one value.',
     inputSchema: {
-      slot: z.enum(['thirdperson_righthand', 'thirdperson_lefthand', 'firstperson_righthand', 'firstperson_lefthand', 'ground', 'gui', 'head', 'fixed']),
+      slot: z.enum(['thirdperson_righthand', 'thirdperson_lefthand', 'firstperson_righthand', 'firstperson_lefthand', 'ground', 'gui', 'head', 'fixed', 'embedded', 'on_shelf']),
       rotation: vec3().optional(),
       translation: vec3().optional(),
       scale: vec3().optional(),
@@ -808,6 +916,7 @@ export function registerTools(server: McpServer) {
       resolution: z.number().optional().describe('Default 960, max 1600'),
       shading: z.boolean().optional().describe('Flat lighting when false'),
       background: z.string().optional().describe('CSS color for an opaque backdrop (default: transparent). Useful to tell "transparent model" apart from "blank image".'),
+      include_reference_models: z.boolean().optional().describe('Frame enabled reference models (see preview_models) together with the model — for scale comparisons'),
     },
     annotations: readOnly,
   }, forward('capture_screenshot', 60_000));
@@ -819,9 +928,66 @@ export function registerTools(server: McpServer) {
       views: z.array(z.string()).optional(),
       resolution: z.number().optional().describe('Per-view size, default 480'),
       background: z.string().optional().describe('CSS color for an opaque backdrop (default: transparent)'),
+      include_reference_models: z.boolean().optional().describe('Frame enabled reference models too'),
     },
     annotations: readOnly,
   }, forward('capture_multi_view', 120_000));
+
+  server.registerTool('preview_models', {
+    title: 'Reference models (player, crafting table, ...)',
+    description: 'Show, hide and place Blockbench\'s reference models next to your model — the Minecraft player, the crafting table (new in 5.2), and any others the app has — to judge scale and proportions. Since Blockbench 5.2 they can be moved, rotated and scaled, and the placement is remembered across restarts. They render in capture_screenshot (add include_reference_models: true so the camera frames them). Without "models" it lists them.',
+    inputSchema: {
+      models: z.array(z.object({
+        id: z.string().describe('Model id or name from the list, e.g. "minecraft_player", "minecraft_crafting_table"'),
+        enabled: z.boolean().optional().describe('Show (true) or hide (false)'),
+        position: vec3().optional().describe('Model units, same space as your model (5.2+)'),
+        rotation: vec3().optional().describe('Degrees (5.2+)'),
+        scale: z.union([z.number(), vec3()]).optional().describe('Uniform number or [x,y,z] (5.2+)'),
+        reset: z.boolean().optional().describe('Back to the default placement'),
+      })).optional(),
+    },
+    annotations: mutating,
+  }, forward('preview_models'));
+
+  server.registerTool('reference_images', {
+    title: 'Reference images (incl. 3D planes)',
+    description: 'Add, move and remove reference images/videos (concept art, blueprints, photos) in the Blockbench viewport. Blockbench 5.2 adds view_mode "plane": the image becomes a panel in the 3D scene that moves with the model — e.g. a side view at plane_position [0, 8, -16] facing the model. Other modes: "flat_image" (overlay fixed to the screen) and "blueprint" (pinned to an orthographic view). NOTE: these are for the USER — they do not show up in capture_screenshot. Without params it lists them.',
+    inputSchema: {
+      add: z.array(z.object({
+        path: z.string().describe('Absolute path to png/jpg/gif/bmp/tiff or mp4/mov/wmv'),
+        name: z.string().optional(),
+        view_mode: z.enum(['plane', 'flat_image', 'blueprint']).optional().describe('default: "plane" when any plane_* field is given, else "flat_image"'),
+        plane_position: vec3().optional().describe('plane: center position in model units'),
+        plane_rotation: vec3().optional().describe('plane: rotation in degrees (default faces the front)'),
+        plane_size: z.union([z.number(), vec2()]).optional().describe('plane: width in model units (height follows the image) or [width, height]'),
+        position: vec2().optional().describe('flat_image/blueprint: screen position in px'),
+        size: vec2().optional().describe('flat_image/blueprint: size in px'),
+        opacity: z.number().optional().describe('0-1'),
+        layer: z.enum(['background', 'viewport', 'float']).optional().describe('Draw behind the model (background, default) or in front'),
+        scope: z.enum(['project', 'global']).optional().describe('project (saved in the .bbmodel, default) or global (every project)'),
+        cull_backface: z.boolean().optional().describe('plane: hide the back side'),
+        clear_mode: z.boolean().optional().describe('Remove the image background color'),
+        visible: z.boolean().optional(),
+      })).optional(),
+      update: z.array(z.object({
+        id: z.string().describe('Reference image name or uuid'),
+        view_mode: z.enum(['plane', 'flat_image', 'blueprint']).optional(),
+        plane_position: vec3().optional(),
+        plane_rotation: vec3().optional(),
+        plane_size: z.union([z.number(), vec2()]).optional(),
+        position: vec2().optional(),
+        size: vec2().optional(),
+        opacity: z.number().optional(),
+        layer: z.enum(['background', 'viewport', 'float']).optional(),
+        cull_backface: z.boolean().optional(),
+        clear_mode: z.boolean().optional(),
+        visible: z.boolean().optional(),
+        name: z.string().optional(),
+      })).optional(),
+      remove: z.array(z.string()).optional().describe('Names/uuids to delete'),
+    },
+    annotations: mutating,
+  }, forward('reference_images'));
 
   server.registerTool('export_model', {
     title: 'Export model',
@@ -829,7 +995,7 @@ export function registerTools(server: McpServer) {
     inputSchema: {
       format: z.enum(['bbmodel', 'bedrock_geo', 'java_block', 'gltf', 'glb', 'obj', 'fbx', 'dae', 'stl', 'optifine_jem']),
       path: z.string().describe('Absolute output file path — build it from get_project_info "paths" (paths.desktop, paths.last_used.gltf/obj/model, ...)'),
-      options: z.record(z.string(), z.any()).optional().describe('Codec options, e.g. {scale: 1, embed_textures: true, animations: true} for gltf'),
+      options: z.record(z.string(), z.any()).optional().describe('Codec options, e.g. {scale: 1, embed_textures: true, animations: true} for gltf/glb. Armature rigs: {armature: true} exports skinned meshes; {merge_armature: true} (Blockbench 5.2) merges all meshes of an armature into ONE skinned mesh instead of one per mesh.'),
     },
     annotations: mutating,
   }, forward('export_model', 60_000));
