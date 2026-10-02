@@ -13,6 +13,7 @@ import './handlers/rigging';
 import './handlers/camera';
 import './handlers/scene';
 import './handlers/io';
+import './handlers/pixelart';
 import './handlers/misc';
 import { connect, shutdown, restart, connectionState } from './socket';
 import { listCommands } from './registry';
@@ -26,9 +27,9 @@ function reg<T>(item: T): T {
 Plugin.register('blockbench_mcp', {
   title: 'Blockbench MCP Bridge',
   author: 'BlockBenchMCP',
-  description: 'Lets AI assistants control Blockbench through the Model Context Protocol: modeling, texturing, UV, rigged & group animations, rendering and export.',
+  description: 'Lets AI assistants control Blockbench through the Model Context Protocol: modeling, texturing, UV, rigged & group animations, rendering, pixel-art sprite export and model export.',
   icon: 'hub',
-  version: '1.4.0',
+  version: '1.5.0',
   variant: 'desktop',
   min_version: '5.0.0',
   tags: ['Interface', 'MCP'],
