@@ -55,7 +55,7 @@ Claude Desktop'ı **tamamen** yeniden başlat (sistem tepsisinden çıkış yap)
 
 Ayrıca **Cowork / kod oturumları** için kullanıcı kapsamında kayıt yapıldı (`claude mcp add --scope user blockbench`) — yani hem klasik sohbet hem kod oturumları MCP'yi görür. İki yüzey aynı anda çalışırsa sunucu örnekleri çakışmaz: portu ilk alan "hub" olur, diğerleri komutlarını hub üzerinden aktarır.
 
-## Araçlar (70)
+## Araçlar (73)
 
 | Alan | Araçlar |
 |---|---|
@@ -67,6 +67,7 @@ Ayrıca **Cowork / kod oturumları** için kullanıcı kapsamında kayıt yapıl
 | IK | `add_ik_controllers` (pole destekli), `bake_ik_animation` |
 | Sahne | `preview_models` (referans modeller), `reference_images` (3D plane dahil) |
 | Görüntü | `capture_screenshot`, `capture_multi_view` |
+| Pixel art | `render_pixel_art`, `export_pixel_sprites` (sprite sheet + Aseprite JSON), `pixel_art_presets` |
 | Display | `set_display_transforms`, `get_display_transforms` |
 | I/O | `export_model` (bbmodel/geo.json/java/gltf/glb/obj/fbx/dae/stl/jem), `export_animations`, `import_model`, `get_model_json` |
 | Kaçış | `run_action`, `eval_code`, `undo`, `redo` |
@@ -153,6 +154,65 @@ Ayrıca **Cowork / kod oturumları** için kullanıcı kapsamında kayıt yapıl
   `on_shelf`; bedrock_block'ta yeni slot oyun varsayılanlarıyla başlar; glTF export `merge_armature`
   seçeneği; efekt keyframe `file` yolları .bbmodel'e göreli olabilir.
 
+## Pixel art export (v1.5)
+
+Modeli 2D oyunlar için **gerçek pixel art** olarak dışa aktarır — küçültülmüş bir ekran görüntüsü değil.
+`render_pixel_art` tek kare / çoklu açı / 4-8-16 yönlü döner setler üretir; `export_pixel_sprites`
+animasyonları **sprite sheet + Aseprite uyumlu JSON** olarak yazar. `pixel_art_presets` tüm açı, stil ve
+palet ön ayarlarını listeler.
+
+**Neden "gerçek" pixel art — boru hattı:**
+
+1. **Texel hizalı ortografik kadraj.** Ölçek (`pixels_per_unit`) otomatik sığdırılır ve doku pikseline
+   tam sayı katı olacak şekilde yuvarlanır (`scale_snap: texel`); model orijini bir piksel köşesine oturtulur.
+   Böylece 16x16'lık doku 1:1, 2:1, 3:1 çizilir, "bazı sütunlar şişkin" titremesi olmaz. 16x16 bir kareye
+   sığmayan model 1/2 texel'e düşer, açıkça raporlanır.
+2. **Anti-aliasing yok, ortalama yok.** Kare 2-4x süper örneklenir ve her çıkış pikseli örneklerin
+   **en sık** rengini alır (mode filtresi); ara renk üretilmez, ince plakalar (kürk, bıyık) `alpha_threshold`
+   ile korunur. Alfa ikilidir (0/255).
+3. **Cel (toon) gölgeleme + hue shift.** Görünüm-uzayı normal geçişinden sabit sol-üst ışıkla 2-5 bant;
+   gölge daha koyu **ve** soğuk (270°'ye doğru) **ve** biraz daha doygun, ışık daha açık ve sıcak (90°'ye
+   doğru) — Oklab'da hesaplanır. Bantlar kamera yaw'ını izler (8 yönün hepsi ekranın sol-üstünden aydınlanır),
+   pitch'i izlemez. Alternatif: `shading: blockbench` (Minecraft yüz gölgesi 100/80/60/50) veya `flat`.
+4. **Seçici (selout) kontur.** `outline: outer` siluete 4-komşuluklu 1 px çizgi ekler (köşeler çapraz
+   bağlanır, şişmez); rengi komşu dolgunun 2 kademe gölgesi, sol-üst kenarda daha açık, sağ-altta en koyu.
+   `inner_lines: depth+parts` (varsayılan) öndeki parçanın arkadakini örttüğü yerde ve **iki farklı
+   kemiğin birleştiği** yerde (kol–gövde yapışık olsa bile; ID-buffer geçişi) 1 px iç çizgi çeker; `normal`
+   keskin kırıklara çizgi ekler. Düz eğimler çizgi vermez (ikinci fark ölçütü).
+5. **Palet.** Varsayılan `source`: yalnızca modelin **kendi doku renkleri** + rampa türevleri kullanılabilir
+   (Oklab'da en yakın). `auto` + `max_colors` (median cut + k-means), sabit paletler (`pico8`, `sweetie16`,
+   `endesga32`, `db32`, `aap64`, `resurrect64`, `apollo`) veya hex listesi; isteğe bağlı Bayer 2/4/8 dither
+   (konturlar hiç dither'lanmaz).
+6. **Temizlik.** Yüzen tek pikseller silinir, kontur köşelerinde Aseprite'ın "pixel-perfect" L kuralı,
+   saydam piksellere kenar rengi taşırılır (`alpha_bleed`, filtreleme yapan motorlarda koyu saçak önler).
+
+**Açılar** (`view`): `side` (model sağa bakar — platformer), `left`, `front`, `back`, `top`, `bottom`,
+`three_quarter`/`rpg` (ön, 30° eğik), `top_down` (60°), `side_three_quarter`, `isometric`/`isometric_right`
+(2:1 pixel iso: 30° yükseklik, 45° yaw — Blender'daki (60,0,45) kamera), `isometric_left`, `true_isometric`
+(35.264°). `yaw`/`pitch` ile serbest açı. `directions: 8` → `down, down_right, right, up_right, up,
+up_left, left, down_left` (ekranda baktığı yön; JSON'da pusula adları da var); `mirror_directions: true`
+simetrik modellerde 5 yön render edip 3'ünü aynalar.
+
+**Boyut/ölçek:** `size` 16/32/64/128/256 veya `[w,h]`; `padding` (varsayılan 1, dış kontur için gerekli);
+`anchor: origin` (ayaklar altta ortada, pivot = orijin) / `bounds` / `center`. Farklı modelleri aynı ölçekte
+tutmak için `pixels_per_unit` sabitlenir. Sonuçta `pivot` (kare içindeki orijin pikseli), `pixels_per_unit`,
+`texel_size_px` ve sığmama uyarıları döner.
+
+**Sprite sheet (`export_pixel_sprites`):** `animation` / `animations` + `fps` (varsayılan 12; loop
+animasyonda son kare = ilk kare atlanır) veya `frames` / `times`; tek ölçek ve tek pivot **tüm pozlar ve
+yönler** üzerinden hesaplanır (kareler zıplamaz). Çıktılar `output.directory` altında: `<ad>.png` (satır =
+animasyon×yön, `columns` ile ızgara; `padding`, `margin`, `extrude`, `pot`), `<ad>.json` (Aseprite
+hash/array: `frames{frame,duration}`, `meta.frameTags` (`walk_right` …), `meta.slices[pivot]`, ek
+`meta.pixelart` bloğu: ppu, yönler, kare pivotları), isteğe bağlı `<ad>_<tag>_<i>.png` kareler ve
+`<ad>_normal.png` (görünüm-uzayı normal haritası — Dead Cells tarzı sprite aydınlatması). Klasör yoksa
+MCP sunucusu (Node) oluşturur. Her iki araç da inline olarak büyütülmüş bir önizleme döndürür; gerçek boyut
+PNG'ler diske yazılır.
+
+**Stil ön ayarları:** `outlined` (varsayılan: toon + selout + derinlik çizgileri), `clean` (yalnız toon),
+`minecraft` (Blockbench yüz gölgesi), `flat` (yalnız doku). Tek tek `shading`, `shade_levels`, `light`,
+`ramp`, `outline*`, `inner_lines`, `palette`, `dither`, `cleanup` ile ezilir. Statik render varsayılan
+olarak **rest pozunu** kullanır (`pose: current` zaman çizelgesindeki pozu alır).
+
 ## Önemli kavramlar
 
 - **Gruplar = kemikler.** Blockbench'te animasyon gruplara uygulanır. Rigli model = derin grup hiyerarşisi; blok-bazlı animasyon = küp kümelerini saran yüzeysel gruplar. Her ikisi de aynı `set_keyframes` aracıyla çalışır.
@@ -169,6 +229,7 @@ node scripts/verify-hidden-window-timers.mjs  # Pencere gizliyken timer throttli
 node scripts/verify-paint-ops.mjs             # v1.2 boyama op'ları (toplu hedef, stops, space:world, strands)
 node scripts/verify-field-fixes.mjs           # v1.3 saha düzeltmeleri (açık bir proje gerekir)
 node scripts/verify-v52-features.mjs          # v1.4 Blockbench 5.2 entegrasyonu (kendi projelerini açıp kapatır)
+node scripts/verify-pixel-art.mjs             # v1.5 pixel art export (kendi modelini kurar; PNG/JSON çıktılarını çözüp doğrular)
 ```
 
 Yeni bir aracı/parametreyi **oturum yeniden başlatmadan** denemek için (açık bir sohbetin araç listesi
@@ -176,7 +237,11 @@ sunucu başlarken sabitlenir):
 
 ```bash
 node scripts/call-tool.mjs inspect_uv '{}'
+node scripts/call-tool.mjs render_pixel_art '{"view":"isometric","size":64}' --images e2e-output/tmp   # dönen görselleri PNG olarak kaydeder
 ```
+
+Eklentiyi Blockbench'i yeniden başlatmadan yenilemek için: `node scripts/call-tool.mjs eval_code
+'{"code":"setTimeout(() => Plugins.devReload(), 300); \"ok\"","undo":false}'` (~5 sn sonra köprü kendini bağlar).
 
 `verify-hidden-window-timers.mjs` yalnızca Blockbench penceresi **simge durumundayken / tamamen örtülüyken**
 anlamlıdır; pencere önplandaysa hatayı üretemeyeceğini söyleyip geçer.
