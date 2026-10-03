@@ -8,7 +8,7 @@ import { registerTools } from './tools';
 
 const server = new McpServer({
   name: 'blockbench',
-  version: '1.5.0',
+  version: '1.6.0',
 }, {
   instructions: [
     'Blockbench modeling conventions (Minecraft-style):',
@@ -17,6 +17,7 @@ const server = new McpServer({
     '- Rotations: degrees, Euler order ZYX (X applied first — matches Minecraft/Bedrock). +X swings a hanging limb FORWARD (toward -Z); +Y yaws counterclockwise seen from above; +Z rolls the top toward west. Keyframe rotations use the same rules around the bone pivot.',
     '- Groups ARE the animation bones: parent cubes into groups, keyframe the groups.',
     'Typical workflow: create_project → add_groups (bone tree) → add_cubes (use mirror: true for symmetric parts) → add_planes for fur/foliage cards → generate_texture_template → paint_faces / paint_texture (jagged_edge for fur silhouettes) → create_animation → set_keyframes + mirror_keyframes → validate_model (intersections at animation times) + query_geometry (ground contact) → capture_screenshot/render_animation to check → export_model.',
+    'Low-poly hand-painted characters ("free" format): compare_reference against the picture → add_loft for limbs/torso/trousers, add_mesh_primitive for hat brims → transform_mesh (taper/bend) + edit_mesh (extrude/inset/loop_cut/bevel), re-run compare_reference → unwrap_mesh (pixel_density 32-64, density_scale for the head) → palette ramp + paint_faces flat colours (or project_reference) → bake_texture into layer "shading" → palette quantize. record_build start/stop records the build as a GIF.',
     'Texturing notes: generate_texture_template FIRST — without it many faces share one UV rect and painting any of them repaints the rest. paint_texture ops accept "target": {element, faces: "all"} where element may be a group, so one op covers a whole limb. Shade with a multi-stop "gradient"; add "space": "world" so the ramp follows the model\'s Y extent instead of restarting on every cube (otherwise multi-cube limbs look banded). Use the "strands" op for fur grain — its dash count and length scale with each face. When a texture looks right as an image but wrong on the model, run inspect_uv before anything else.',
     'A model that renders washed out or covered in a fine grid is usually the viewer\'s own settings, not the texture: Blockbench\'s "brightness" (default 50) and "pixel_grid" (default off) are display-only. get_status reports neither — check them with eval_code on `settings` before repainting.',
     'Animation timing: keyframe times snap to the animation FPS grid ("snapping", default 24), so 0.3s silently becomes 0.29167s and 1.2s becomes 1.20833s — long enough to stretch the clip past its intended length. set_keyframes reports every moved time under "snapped"; pass "snap": false for exact times. edit_keyframes is the retime/delete tool (set_time, time_offset, time_scale, delete, resize_to_content to shorten the clip). Keyframe values are DELTAS on top of a bone\'s rest rotation, not absolute angles.',

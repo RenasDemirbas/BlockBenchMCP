@@ -1,5 +1,29 @@
 # Değişiklik günlüğü
 
+## 1.6.0 — Low-poly karakter araçları
+
+- Mesh boyama: `paint_texture`, `paint_faces` ve `get_texture` artık mesh yüzlerini de hedefliyor. UV
+  poligonu piksel tam kırpılıyor, `space: "world"` gradyanı texel başına hesaplanıyor. Mesh'lerde yön
+  adı (`"up"`) o yöne bakan tüm yüzleri seçer. `inspect_uv` mesh UV sorunlarını ve texel yoğunluğunu
+  raporlar.
+- `unwrap_mesh`: bağlı mesh yüzleri adalara birleşir. Dikiş (seam) kontrolü, parça başına yoğunluk
+  (`density_scale`), eski boyanın yeni düzene taşınması.
+- `edit_mesh`: Blockbench'in extrude, inset, solidify, loop cut, merge, dissolve, create/invert face ve
+  split araçları; ek olarak subdivide, bevel, delete ve merge_meshes. Adımlar `select: "previous"` ile
+  zincirlenir.
+- `add_loft`: halkalardan kutu, yuvarlak ya da özel profilli uzuv ve tüp. `transform_mesh`: taper,
+  bend, twist, scale, rotate, move, smooth, jitter.
+- `bake_texture`: ışık yönü, ışın izlemeli ambient occlusion, dışbükey kenar parlaması ve iç bükey
+  kıvrım gölgesi, yükseklik gradyanı ve gren. Sonuç her texel'in kendi renginden türeyen ton kaydıran
+  pixel-art rampasına oturur.
+- `palette`: ton kaydıran rampalar, renk çıkarma, `auto` / sabit palet / rampalara sabitleme (dither'lı).
+- `compare_reference`: referans görselle siluet IoU'su, en-boy oranı ve bant bazında genişlik farkı,
+  overlay görseli. `project_reference`: referansı görünür ve örtülmemiş texel'lere yansıtır.
+- `record_build`: her düzenlemede sabit kameradan kare alır, sonda animasyonlu GIF yazar.
+- Düzeltme: `add_mesh_primitive` silindir, koni, piramit, torus ve plane'i içi dışına dönük
+  üretiyordu; extrude bu yüzden içeri gidiyordu. 4'ten fazla kenarlı silindir ve koni kapakları
+  (n-gen) da hata veriyordu, artık üçgen fan olarak üretiliyor.
+
 ## 1.5.0 — Pixel art export
 
 - `render_pixel_art`, `export_pixel_sprites`, `pixel_art_presets` eklendi.
