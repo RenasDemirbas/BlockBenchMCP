@@ -51,7 +51,6 @@ function captureFrame(label: string): boolean {
 export function stopRecording() {
   if (!rec) return;
   Blockbench.removeListener?.('finish_edit', rec.listener);
-  clearTimeout(rec.timer);
   rec = null;
 }
 
@@ -69,13 +68,19 @@ register('record_build', async (params) => {
       frames: [], labels: [], lastHash: 0, timer: null, listener: null,
       background: bg ? [bg.r, bg.g, bg.b] : null,
     };
-    // Each finished undo step = one modeling step. Debounced, because one
-    // tool call can finish several edits back to back.
+    // Each finished undo step = one modeling step. Captured in a microtask:
+    // that runs once the current command has finished updating the viewport,
+    // and unlike timers it is never throttled when Blockbench is in the
+    // background — a fast scripted build still gets a frame per edit.
     rec.listener = (data: any) => {
-      if (!rec) return;
-      clearTimeout(rec.timer);
+      if (!rec || rec.timer) return;
       const label = data?.message || 'edit';
-      rec.timer = setTimeout(() => { try { captureFrame(label); } catch { /* keep recording */ } }, 150);
+      rec.timer = true;
+      queueMicrotask(() => {
+        if (!rec) return;
+        rec.timer = null;
+        try { captureFrame(label); } catch { /* keep recording */ }
+      });
     };
     Blockbench.on('finish_edit', rec.listener);
     captureFrame('start');
@@ -92,7 +97,6 @@ register('record_build', async (params) => {
     if (!rec) fail('Not recording.');
     const r = rec;
     Blockbench.removeListener?.('finish_edit', r.listener);
-    clearTimeout(r.timer);
     try { captureFrame('end'); } catch { /* ignore */ }
     rec = null;
     if (action === 'cancel') return { cancelled: true, frames: r.frames.length };
