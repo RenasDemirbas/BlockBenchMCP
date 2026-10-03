@@ -13,6 +13,7 @@ import './handlers/meshedit';
 import './handlers/meshgen';
 import './handlers/bake';
 import './handlers/palette';
+import './handlers/reference';
 import './handlers/animation';
 import './handlers/rigging';
 import './handlers/camera';

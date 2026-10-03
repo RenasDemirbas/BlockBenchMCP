@@ -859,6 +859,41 @@ export function registerTools(server: McpServer) {
     annotations: mutating,
   }, forward('palette'));
 
+  const refCamera = {
+    image: z.string().optional().describe('Absolute path to the reference picture (png/jpg/webp)'),
+    image_data: z.string().optional().describe('Or the image as base64 / data URL'),
+    view: z.string().optional().describe('Camera preset matching the reference (front, back, side, left, three_quarter, isometric...) — default front'),
+    yaw: z.number().optional().describe('Override: degrees around Y (0 = front, 90 = right side, 180 = back); a 3/4 portrait is often 20-35'),
+    pitch: z.number().optional().describe('Override: degrees of downward tilt'),
+    background: z.string().optional().describe('Reference background colour when the image has no transparency (default: sampled from its corners)'),
+    tolerance: z.number().optional().describe('Background colour tolerance per channel (default 40)'),
+    resolution: z.number().optional().describe('Model render size in px'),
+  };
+
+  server.registerTool('compare_reference', {
+    title: 'Compare the model to a reference image',
+    description: 'Score how well the model\'s SILHOUETTE matches a reference picture from the same angle, and say where it differs. The model is rendered from view/yaw/pitch, fitted to the reference silhouette by height and centred, then compared: IoU (1 = identical, >0.85 close), aspect ratios, and per height band (top → bottom) the model vs reference width and centre shift, with plain advice like "40-50% from top: model is 22% NARROWER (~3 units)". Returns an image: reference | fitted model | overlay (RED = model has too much, BLUE = missing). Use it in a loop: compare → adjust (transform_mesh / update_elements / add_loft) → compare again. Matching the camera angle matters more than anything — try a few yaw values if the reference is a 3/4 view.',
+    inputSchema: {
+      ...refCamera,
+      bands: z.number().optional().describe('Height bands to report (default 8)'),
+      threshold: z.number().optional().describe('Width difference % that triggers advice (default 12)'),
+    },
+    annotations: readOnly,
+  }, forward('compare_reference'));
+
+  server.registerTool('project_reference', {
+    title: 'Project a reference image onto the texture',
+    description: 'Paint the reference picture onto the model through the same fitted camera as compare_reference — a fast, faithful starting point for the texture (colours, patterns, buttons, trim in the right places). Only texels that face the camera and are not hidden behind other parts are painted; run it again from other views (back/side) with matching pictures, or paint the rest by hand. Fix proportions first (compare_reference), unwrap first (unwrap_mesh), paint into a "layer" to keep it separate, then palette {action:"quantize"} to snap to a tight palette and bake_texture for lighting.',
+    inputSchema: {
+      ...refCamera,
+      elements: z.array(z.string()).optional().describe('Limit to these cubes/meshes/groups (default whole model)'),
+      layer: z.string().optional().describe('Paint into this texture layer (created if missing)'),
+      opacity: z.number().optional().describe('0-1, default 1'),
+      min_facing: z.number().optional().describe('Skip faces whose normal·view is below this (default 0.15) — steep faces smear'),
+    },
+    annotations: mutating,
+  }, forward('project_reference'));
+
   // ───────────────────────────── animation ─────────────────────────────
 
   server.registerTool('create_animation', {
