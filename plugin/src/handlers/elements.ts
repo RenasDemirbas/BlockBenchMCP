@@ -256,8 +256,18 @@ register('add_mesh_primitive', (params) => {
       if (shape === 'cylinder') faces.push({ vertices: [bottom[i], bottom[j], top[j], top[i]] });
       else faces.push({ vertices: [bottom[i], bottom[j], apex!] });
     }
-    faces.push({ vertices: [...bottom].reverse() });
-    if (shape === 'cylinder') faces.push({ vertices: top });
+    // Caps: Blockbench faces hold 3-4 vertices, so an n-gon cap becomes a
+    // triangle fan around a centre vertex (a quad when there are 4 sides).
+    const cap = (ring: string[], y: number, down: boolean) => {
+      if (ring.length <= 4) { faces.push({ vertices: down ? [...ring].reverse() : ring }); return; }
+      const c = V(0, y, 0);
+      for (let i = 0; i < ring.length; i++) {
+        const a = ring[i], b = ring[(i + 1) % ring.length];
+        faces.push({ vertices: down ? [b, a, c] : [a, b, c] });
+      }
+    };
+    cap(bottom, 0, true);
+    if (shape === 'cylinder') cap(top, height, false);
   } else if (shape === 'sphere') {
     const rings = Math.max(3, Math.round(sides / 2));
     const grid: string[][] = [];

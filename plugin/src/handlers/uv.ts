@@ -1,6 +1,7 @@
 // UV mapping: per-face cube UV, box UV, mesh UV, auto-UV.
 import { register, fail, requireProject } from '../registry';
 import { resolveNode, resolveTexture, clampInt, FACE_KEYS } from '../util';
+import { surfaceFaces, faceMask, pixelArea, worldArea, isSurfaceElement } from '../surface';
 
 register('set_cube_uv', (params) => {
   requireProject();
@@ -203,6 +204,54 @@ register('inspect_uv', (params) => {
     }
   }
 
+  // ── Meshes: UVs are free polygons, so check coverage, overlap and holes per texel. ──
+  const meshDegenerate: string[] = [];
+  const meshHoled: { face: string; transparent_px: number; pct: number }[] = [];
+  let meshFaces = 0, meshOverlapPx = 0;
+  const overlapSamples: string[] = [];
+  const owners = new Map<any, Map<number, string>>();
+  for (const mesh of (Project.elements as any[]).filter((el) => el instanceof Mesh)) {
+    for (const key of Object.keys(mesh.faces)) {
+      const face = mesh.faces[key];
+      if (face.vertices.length < 3) continue;
+      meshFaces++;
+      if (!face.getTexture?.()) { if (noTexture.length < maxSamples) noTexture.push(`${mesh.name}.${key}`); }
+    }
+    for (const f of surfaceFaces([mesh], only ? { texture: only } : {})) {
+      const label = `${mesh.name}.${f.key}`;
+      const m = faceMask(f);
+      if (!m.count || Math.abs(pixelArea(f.px)) < 0.5) { if (meshDegenerate.length < maxSamples) meshDegenerate.push(label); continue; }
+      const own = owners.get(f.tex) || new Map<number, string>();
+      owners.set(f.tex, own);
+      const bmp = scanPixels ? bitmapOf(f.tex) : null;
+      let clear = 0;
+      for (let i = 0; i < m.bits.length; i++) {
+        if (!m.bits[i]) continue;
+        const x = m.x + (i % m.w), y = m.y + Math.floor(i / m.w);
+        const id = y * f.tex.width + x;
+        const prev = own.get(id);
+        if (prev && prev !== label) {
+          meshOverlapPx++;
+          if (overlapSamples.length < maxSamples && !overlapSamples.some((o) => o.startsWith(label))) overlapSamples.push(`${label} ↔ ${prev}`);
+        } else own.set(id, label);
+        if (bmp && bmp.data[(y * bmp.w + x) * 4 + 3] === 0) clear++;
+      }
+      if (clear && meshHoled.length < maxSamples * 3) meshHoled.push({ face: label, transparent_px: clear, pct: Math.round((100 * clear) / m.count) });
+    }
+  }
+  meshHoled.sort((a, b) => b.pct - a.pct);
+
+  // ── Texel density (texture px per model unit) across cubes AND meshes. ──
+  const density: { label: string; d: number }[] = [];
+  for (const f of surfaceFaces((Project.elements as any[]).filter(isSurfaceElement), only ? { texture: only } : {})) {
+    const wa = worldArea(f.world), pa = Math.abs(pixelArea(f.px));
+    if (wa > 1e-4 && pa > 0.25) density.push({ label: `${f.el.name}.${f.key}`, d: Math.sqrt(pa / wa) });
+  }
+  density.sort((a, b) => a.d - b.d);
+  const median = density.length ? density[Math.floor(density.length / 2)].d : 0;
+  const low = density.filter((x) => x.d < median / 1.5);
+  const high = density.filter((x) => x.d > median * 1.5);
+
   const shared = [...rectGroups.entries()].filter(([, v]) => v.length > 1);
   const sharedFaces = shared.reduce((sum, [, v]) => sum + v.length, 0);
   holed.sort((a, b) => b.pct - a.pct);
@@ -240,6 +289,18 @@ register('inspect_uv', (params) => {
   if (stretched.length) {
     findings.push({ level: 'warn', type: 'uv_stretched', message: `${stretched.length}+ face rect(s) do not match the face aspect (e.g. ${stretched[0]}) — pixels are stretched.` });
   }
+  if (meshDegenerate.length) {
+    findings.push({ level: 'error', type: 'mesh_uv_degenerate', message: `${meshDegenerate.length}+ mesh face(s) have a zero-size UV polygon (e.g. ${meshDegenerate.slice(0, 3).join(', ')}) — they cannot be painted. Run unwrap_mesh.` });
+  }
+  if (meshOverlapPx) {
+    findings.push({ level: 'warn', type: 'mesh_uv_overlap', message: `${meshOverlapPx} texel(s) are shared by more than one mesh face (e.g. ${overlapSamples.slice(0, 3).join(', ')}) — painting one paints both. Run unwrap_mesh unless the overlap is a deliberate mirror.` });
+  }
+  if (meshHoled.length) {
+    findings.push({ level: 'error', type: 'transparent_inside_mesh_face', message: `${meshHoled.length}+ mesh face(s) contain transparent texels (worst: ${meshHoled[0].face} ${meshHoled[0].pct}%).` });
+  }
+  if (density.length > 1 && (low.length || high.length)) {
+    findings.push({ level: 'info', type: 'texel_density_mismatch', message: `Texel density median ${median.toFixed(1)} px/unit; ${low.length} face(s) are >1.5x lower (e.g. ${low.slice(0, 3).map((x) => `${x.label}=${x.d.toFixed(1)}`).join(', ')}), ${high.length} higher (e.g. ${high.slice(-3).map((x) => `${x.label}=${x.d.toFixed(1)}`).join(', ')}). Fine if deliberate (a detailed face/torso); otherwise re-run unwrap_mesh.` });
+  }
   for (const t of textures) {
     if (t.uv_area_used_pct !== null && t.uv_area_used_pct < 40) {
       findings.push({ level: 'info', type: 'atlas_underused', message: `"${t.name}": UVs only reach ${t.used_uv_extent.join('x')} of ${t.uv_size.join('x')} (~${t.uv_area_used_pct}% used). A lower pixel_density would waste less space.` });
@@ -254,7 +315,12 @@ register('inspect_uv', (params) => {
     cubes: cubes.length,
     faces,
     box_uv_cubes: boxUv,
-    meshes_skipped: meshCount || undefined,
+    meshes: meshCount || undefined,
+    mesh_faces: meshCount ? meshFaces : undefined,
+    texel_density: density.length ? { min: +density[0].d.toFixed(2), median: +median.toFixed(2), max: +density[density.length - 1].d.toFixed(2), unit: 'texture px per model unit' } : undefined,
+    mesh_uv_degenerate: meshDegenerate.length ? meshDegenerate : undefined,
+    mesh_uv_overlap: meshOverlapPx ? { texels: meshOverlapPx, samples: overlapSamples } : undefined,
+    transparent_inside_mesh_faces: meshHoled.length ? meshHoled.slice(0, maxSamples) : undefined,
     textures,
     rotation_counts: rotation,
     mirrored_u_by_face: mirroredU,
@@ -266,6 +332,6 @@ register('inspect_uv', (params) => {
     rotated: rotatedSamples.length ? rotatedSamples : undefined,
     transparent_inside_faces: holed.length ? holed.slice(0, maxSamples) : undefined,
     findings,
-    note: findings.length ? undefined : 'No UV mapping problems found — every face has its own opaque, correctly-proportioned rect.',
+    note: findings.length ? undefined : 'No UV mapping problems found — every face has its own opaque, correctly-proportioned UV space.',
   };
 });
