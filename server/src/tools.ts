@@ -894,6 +894,24 @@ export function registerTools(server: McpServer) {
     annotations: mutating,
   }, forward('project_reference'));
 
+  server.registerTool('record_build', {
+    title: 'Record a build timelapse (GIF)',
+    description: 'Record the model being built, part by part, like the turnaround/timelapse GIFs artists post. "start" fixes a camera and scale; from then on every finished edit (each undo step) captures a frame — the model grows in place. "frame" captures one manually, "status" reports, "stop" writes an animated GIF to "path" (fps, hold_last seconds on the final frame) and returns a contact sheet; "cancel" discards. Frames that look identical to the previous one are skipped.',
+    inputSchema: {
+      action: z.enum(['start', 'frame', 'status', 'stop', 'cancel']),
+      view: z.string().optional().describe('start: camera preset (default three_quarter)'),
+      yaw: z.number().optional(), pitch: z.number().optional(),
+      size: z.number().optional().describe('start: frame size in px (default 256)'),
+      height_units: z.number().optional().describe('start: model units that fit the frame height (default 48) — set to the finished model\'s height'),
+      background: z.string().optional().describe('start: solid background colour (default transparent)'),
+      label: z.string().optional().describe('frame: label'),
+      path: z.string().optional().describe('stop: absolute .gif path to write'),
+      fps: z.number().optional().describe('stop: frames per second (default 6)'),
+      hold_last: z.number().optional().describe('stop: seconds to hold the final frame (default 2)'),
+    },
+    annotations: mutating,
+  }, forward('record_build'));
+
   // ───────────────────────────── animation ─────────────────────────────
 
   server.registerTool('create_animation', {

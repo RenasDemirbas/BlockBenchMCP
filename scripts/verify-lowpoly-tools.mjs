@@ -278,6 +278,25 @@ try {
         out[k] = g(x0 + 2) + g(x1 - 2); } return out; })()`);
     check('front face got red + blue halves, back face untouched', cols && /R/.test(cols.north) && /B/.test(cols.north) && cols.south === 'GG', JSON.stringify(cols));
   }
+
+  // ── 9. record_build ───────────────────────────────────────────────────────
+  if (want('record')) {
+    const dir = process.env.REF_DIR;
+    const ids = await bb(`Project.elements.map(e => e.uuid)`);
+    if (Array.isArray(ids) && ids.length) await tool('delete_elements', { ids });
+    const st = await tool('record_build', { action: 'start', view: 'isometric_right', size: 128, height_units: 30, background: '#20242c' });
+    check('record_build start', !st.isError, st.text.slice(0, 160));
+    await tool('add_loft', { name: 'r_leg', rings: [{ at: [0, 0, 0], size: 3 }, { at: [0, 12, 0], size: 3 }] });
+    await sleep(400);
+    await tool('add_loft', { name: 'r_body', rings: [{ at: [0, 12, 0], size: [8, 4] }, { at: [0, 24, 0], size: [9, 5] }] });
+    await sleep(400);
+    await tool('add_mesh_primitive', { shape: 'cylinder', sides: 8, diameter: 14, height: 1, name: 'r_brim', position: [0, 27, 0] });
+    await sleep(400);
+    const status = await tool('record_build', { action: 'status' });
+    check('a frame per edit', status.json?.frames >= 4, JSON.stringify(status.json));
+    const stop = await tool('record_build', { action: 'stop', path: `${dir}/build.gif`, fps: 4 });
+    check('record_build writes a GIF', !stop.isError && stop.json?.files?.length === 1, stop.text.slice(0, 200));
+  }
 } catch (err) {
   check('no exception', false, err.stack || err.message);
 } finally {

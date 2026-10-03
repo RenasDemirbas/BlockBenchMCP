@@ -14,6 +14,8 @@ import './handlers/meshgen';
 import './handlers/bake';
 import './handlers/palette';
 import './handlers/reference';
+import './handlers/record';
+import { stopRecording } from './handlers/record';
 import './handlers/animation';
 import './handlers/rigging';
 import './handlers/camera';
@@ -35,7 +37,7 @@ Plugin.register('blockbench_mcp', {
   author: 'BlockBenchMCP',
   description: 'Lets AI assistants control Blockbench through the Model Context Protocol: modeling, texturing, UV, rigged & group animations, rendering, pixel-art sprite export and model export.',
   icon: 'hub',
-  version: '1.5.0',
+  version: '1.6.0',
   variant: 'desktop',
   min_version: '5.0.0',
   tags: ['Interface', 'MCP'],
@@ -90,6 +92,7 @@ Plugin.register('blockbench_mcp', {
   onunload() {
     shutdown();
     uninstallUnthrottledTimers();
+    stopRecording();
     deletables.forEach((d) => d.delete?.());
     deletables.length = 0;
   },

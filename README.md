@@ -17,10 +17,11 @@ alabilirsin.
 
 | Alan | Kapsam |
 |---|---|
-| Modelleme | Küp, mesh, plane, locator, bounding box. Gruplar animasyonda kemik olarak kullanılır. Simetrik parçalar için `mirror` desteği var. |
-| Doku | Şablon üretimi, katmanlar, gradyan, gürültü, kürk çizgisi (`strands`), yüz bazında boyama, UV teşhisi |
+| Modelleme | Küp, mesh, plane, locator, bounding box. Gruplar animasyonda kemik olarak kullanılır. Simetrik parçalar için `mirror` desteği var. Low-poly box modeling: kesitlerden uzuv (`add_loft`), extrude/inset/loop cut/bevel (`edit_mesh`), taper/bend/twist (`transform_mesh`). |
+| Doku | Şablon üretimi, mesh UV açma (`unwrap_mesh`), katmanlar, gradyan, gürültü, kürk çizgisi (`strands`), küp ve mesh yüzlerine boyama, ışık/AO/kenar bake'i (`bake_texture`), renk rampası ve palete sabitleme (`palette`), UV teşhisi |
 | Animasyon | Keyframe (Molang ifadeleriyle), ayna keyframe, hazır animasyonlar, efekt keyframe'leri, IK ve pole |
-| Kontrol | Ekran görüntüsü, çoklu açı görüntüsü, animasyon önizlemesi, kesişme ve zemin teması kontrolü |
+| Kontrol | Ekran görüntüsü, çoklu açı görüntüsü, animasyon önizlemesi, kesişme ve zemin teması kontrolü, yapım süreci GIF'i (`record_build`) |
+| Referans | Referans görselle siluet karşılaştırma (`compare_reference`), referansı dokuya yansıtma (`project_reference`) |
 | Export | bbmodel, Bedrock geo.json, Java, glTF/GLB, OBJ, FBX, DAE, STL, JEM, animasyon JSON |
 | Pixel art | Tek kare, 4/8/16 yönlü setler, Aseprite JSON'lu sprite sheet |
 
@@ -106,17 +107,18 @@ ekran görüntüsüne bakıp düzeltme istemek, en sonda toplu düzeltme yapmakt
 
 ## Araçlar
 
-Toplam 73 araç var.
+Toplam 82 araç var.
 
 | Alan | Araçlar |
 |---|---|
 | Proje | `get_status`, `list_formats`, `create_project`, `get_project_info`, `set_project_settings`, `open_project`, `save_project`, `select_project_tab`, `close_project` |
-| Geometri | `add_groups`, `add_cubes`, `add_meshes`, `add_mesh_primitive`, `add_planes`, `add_locators`, `add_bounding_boxes`, `list_outline`, `get_element`, `update_elements`, `delete_elements`, `duplicate_elements`, `mirror_elements`, `select_elements` |
-| Doku | `create_texture`, `generate_texture_template`, `list_textures`, `get_texture`, `import_texture`, `apply_texture`, `paint_texture`, `paint_faces`, `texture_layers`, `resize_texture`, `set_texture_resolution`, `delete_texture` |
-| UV | `set_cube_uv`, `set_mesh_uv`, `auto_uv`, `inspect_uv` |
+| Geometri | `add_groups`, `add_cubes`, `add_meshes`, `add_mesh_primitive`, `add_loft`, `edit_mesh`, `transform_mesh`, `add_planes`, `add_locators`, `add_bounding_boxes`, `list_outline`, `get_element`, `update_elements`, `delete_elements`, `duplicate_elements`, `mirror_elements`, `select_elements` |
+| Doku | `create_texture`, `generate_texture_template`, `list_textures`, `get_texture`, `import_texture`, `apply_texture`, `paint_texture`, `paint_faces`, `bake_texture`, `palette`, `texture_layers`, `resize_texture`, `set_texture_resolution`, `delete_texture` |
+| UV | `unwrap_mesh`, `set_cube_uv`, `set_mesh_uv`, `auto_uv`, `inspect_uv` |
 | Animasyon | `create_animation`, `list_animations`, `get_animation`, `update_animation`, `delete_animation`, `set_keyframes`, `edit_keyframes`, `mirror_keyframes`, `add_effect_keyframes`, `apply_animation_preset`, `variable_placeholders`, `preview_animation`, `render_animation` |
 | IK | `add_ik_controllers`, `bake_ik_animation` |
-| Kontrol | `validate_model`, `query_geometry`, `capture_screenshot`, `capture_multi_view` |
+| Kontrol | `validate_model`, `query_geometry`, `capture_screenshot`, `capture_multi_view`, `record_build` |
+| Referans | `compare_reference`, `project_reference` |
 | Sahne | `preview_models`, `reference_images` |
 | Pixel art | `render_pixel_art`, `export_pixel_sprites`, `pixel_art_presets` |
 | Display | `set_display_transforms`, `get_display_transforms` |
@@ -138,6 +140,29 @@ Her aracın parametreleri MCP şemasında açıklanmıştır. Claude bunları ke
 - Doku resim olarak doğru ama modelde yanlış görünüyorsa önce `inspect_uv` çalıştır.
 - Model soluk ya da ızgaralı görünüyorsa sebep genelde dokuda değildir. Blockbench'in `brightness` ve
   `pixel_grid` ayarlarını kontrol et.
+
+### Low-poly, elle boyanmış karakter
+
+PS1 tarzı, dokusu elle boyanmış karakterler için önerilen sıra:
+
+1. **Referans.** `compare_reference` ile referans görseli aynı açıdan karşılaştır. Araç her yükseklik
+   bandında modelin ne kadar geniş ya da dar kaldığını birim cinsinden söyler.
+2. **Blok model.** Kollar, bacaklar, pantolon ve gövde için `add_loft` kullan: halkaların merkezini ve
+   boyutunu verirsin, sivrilen ve bükülen kutu uzuv çıkar. Şapka kenarı için `add_mesh_primitive`
+   cylinder, pelerin için plane + `edit_mesh` solidify.
+3. **Şekillendirme.** `transform_mesh` ile taper/bend/twist, `edit_mesh` ile extrude/inset/loop cut.
+   Silah gövdesi ve bot gibi kutu parçaları `bevel` ile yumuşat. Her adımdan sonra tekrar
+   `compare_reference`.
+4. **UV.** `unwrap_mesh {pixel_density: 32-64, density_scale: {"head": 2}}`. Uzuvlar tek şerit ada
+   olarak açılır. Önceden boyanmış piksel varsa yeni düzene taşınır.
+5. **Düz renk.** `palette {action: "ramp"}` ile renk rampalarını seç, `paint_faces` ile düz renk ver.
+   Mesh'lerde `faces: ["up"]` yukarı bakan yüzleri seçer. İstersen başlangıç için
+   `project_reference` ile referansı dokuya yansıt.
+6. **Bake.** `bake_texture {layer: "shading"}` ışığı, AO'yu ve kenar parlamasını ton kaydıran pixel-art
+   basamakları olarak boyar. Ayrı katmana yazdığı için tekrar bake etmek gölgeyi üst üste bindirmez.
+7. **Temizlik.** `palette {action: "quantize"}` ile kaçak renkleri palete sabitle.
+8. **Kayıt.** Başta `record_build {action: "start"}` dersen her adım bir kare olur. Sonda `stop`
+   parça parça yapım GIF'ini yazar.
 
 ### Animasyon
 
@@ -212,6 +237,7 @@ node scripts/call-tool.mjs render_pixel_art '{"view":"isometric","size":64}' --i
 | `verify-field-fixes.mjs` | 1.3 düzeltmeleri | Açık bir proje |
 | `verify-v52-features.mjs` | Blockbench 5.2 özellikleri | Blockbench 5.2 |
 | `verify-pixel-art.mjs` | Pixel art çıktıları (PNG ve JSON) | Açık Blockbench |
+| `verify-lowpoly-tools.mjs` | Mesh boyama, unwrap, edit/loft/transform, bake, palet, referans, kayıt. Bölüm seçmek için `node scripts/verify-lowpoly-tools.mjs paint,bake` | Açık Blockbench, referans testleri için `REF_DIR` |
 | `verify-hidden-window-timers.mjs` | Pencere arka plandayken zamanlayıcılar | Küçültülmüş Blockbench |
 
 Hepsi `node scripts/<ad>` ile çalışır.
