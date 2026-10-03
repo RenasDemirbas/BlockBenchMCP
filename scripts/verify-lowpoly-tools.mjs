@@ -103,6 +103,35 @@ try {
     const insp = await tool('inspect_uv', {});
     check('inspect_uv reports meshes + texel density', !insp.isError && insp.json?.mesh_faces > 0 && insp.json?.texel_density, JSON.stringify({ m: insp.json?.mesh_faces, d: insp.json?.texel_density, f: insp.json?.findings?.map((f) => f.type) }));
   }
+
+  // ── 2. unwrap_mesh ────────────────────────────────────────────────────────
+  if (want('unwrap')) {
+    await tool('delete_elements', { ids: (await bb(`Project.elements.map(e => e.uuid)`)) || [] }).catch(() => {});
+    await tool('add_mesh_primitive', { shape: 'cylinder', sides: 8, diameter: 6, height: 20, name: 'arm' });
+    await tool('add_mesh_primitive', { shape: 'sphere', sides: 8, diameter: 8, name: 'head', position: [12, 0, 0] });
+    await tool('generate_texture_template', { pixel_density: 32, name: 'old_tex' });
+    await tool('paint_faces', { targets: [{ element: 'arm', faces: 'all', color: '#2040a0' }, { element: 'arm', faces: ['up'], color: '#ff0000' }, { element: 'head', faces: 'all', color: '#30a030' }] });
+    const before = await tool('inspect_uv', {});
+    const un = await tool('unwrap_mesh', { pixel_density: 32, density_scale: { head: 2 }, name: 'unwrapped' });
+    check('unwrap_mesh runs', !un.isError, un.text.slice(0, 300));
+    check('paint transferred', un.json?.transferred_texels > 50, `texels=${un.json?.transferred_texels}`);
+    const after = await tool('inspect_uv', {});
+    check('no degenerate / overlapping / holed mesh UVs after unwrap', !after.json?.mesh_uv_degenerate && !after.json?.mesh_uv_overlap && !after.json?.transparent_inside_mesh_faces, JSON.stringify(after.json?.findings?.map((f) => f.message.slice(0, 120))));
+    const dens = await bb(`(() => { const r = {}; for (const m of Mesh.all) { let pa = 0, wa = 0; const tex = Texture.all.find(t => t.name.startsWith('unwrapped'));
+      const fx = tex.width / tex.getUVWidth(); for (const k in m.faces) { const f = m.faces[k]; const vs = f.getSortedVertices(); if (vs.length < 3) continue;
+      let s = 0; for (let i = 0; i < vs.length; i++) { const a = f.uv[vs[i]], b = f.uv[vs[(i+1)%vs.length]]; s += a[0]*b[1]-b[0]*a[1]; } pa += Math.abs(s/2)*fx*fx;
+      const P = vs.map(v => m.vertices[v]); for (let i = 1; i + 1 < P.length; i++) { const u = P[i].map((c, j) => c - P[0][j]), w = P[i+1].map((c, j) => c - P[0][j]);
+      wa += Math.hypot(u[1]*w[2]-u[2]*w[1], u[2]*w[0]-u[0]*w[2], u[0]*w[1]-u[1]*w[0]) / 2; } }
+      r[m.name] = wa ? Math.sqrt(pa/wa) : null; } return r; })()`);
+    check('head got ~2x texel density', dens && dens.head && dens.arm && dens.head / dens.arm > 1.6 && dens.head / dens.arm < 2.5, JSON.stringify(dens));
+    const red = await bb(`(() => { const m = Mesh.all.find(m => m.name === 'arm'); const tex = Texture.all.find(t => t.name.startsWith('unwrapped'));
+      const fk = Object.keys(m.faces).find(k => m.faces[k].getNormal(true)[1] > 0.9 && m.faces[k].vertices.length === 3);
+      const f = m.faces[fk]; const fx = tex.width / tex.getUVWidth(); let cx = 0, cy = 0; f.vertices.forEach(v => { cx += f.uv[v][0]; cy += f.uv[v][1]; });
+      const d = tex.canvas.getContext('2d').getImageData(Math.floor(cx / 3 * fx), Math.floor(cy / 3 * fx), 1, 1).data; return [d[0], d[1], d[2]]; })()`);
+    check('red top survives the unwrap', Array.isArray(red) && red[0] > 200 && red[1] < 40, JSON.stringify(red));
+    const islands = await bb(`(() => { const m = Mesh.all.find(m => m.name === 'arm'); const seen = new Set(); let n = 0; for (const k in m.faces) { if (seen.has(k)) continue; n++; const isl = m.faces[k].getUVIsland(); isl.forEach(x => seen.add(x)); } return [n, Object.keys(m.faces).length]; })()`);
+    check('arm faces were joined into a few islands', Array.isArray(islands) && islands[0] < islands[1] / 2, JSON.stringify(islands));
+  }
 } catch (err) {
   check('no exception', false, err.stack || err.message);
 } finally {

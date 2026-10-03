@@ -161,7 +161,7 @@ export function surfaceFaces(elements: any[], opts: { faces?: string[] | 'all'; 
  * Visit every texel whose CENTRE lies inside the face's UV polygon, with the
  * interpolated world position. Each texel is visited once per face.
  */
-export function forEachTexel(face: SurfaceFace, cb: (x: number, y: number, world: P3) => void) {
+export function forEachTexel(face: SurfaceFace, cb: (x: number, y: number, world: P3, tri: number, l1: number, l2: number, l3: number) => void, strict = false) {
   const n = face.px.length;
   const seen = new Set<number>();
   const W = face.tex.width, H = face.tex.height;
@@ -180,7 +180,8 @@ export function forEachTexel(face: SurfaceFace, cb: (x: number, y: number, world
         const l1 = ((b[1] - c[1]) * (px - c[0]) + (c[0] - b[0]) * (py - c[1])) / den;
         const l2 = ((c[1] - a[1]) * (px - c[0]) + (a[0] - c[0]) * (py - c[1])) / den;
         const l3 = 1 - l1 - l2;
-        const e = -1e-6;
+        // strict: skip centres lying on an edge (shared with the neighbour face).
+        const e = strict ? 1e-4 : -1e-6;
         if (l1 < e || l2 < e || l3 < e) continue;
         const id = y * W + x;
         if (seen.has(id)) continue;
@@ -189,14 +190,14 @@ export function forEachTexel(face: SurfaceFace, cb: (x: number, y: number, world
           wa[0] * l1 + wb[0] * l2 + wc[0] * l3,
           wa[1] * l1 + wb[1] * l2 + wc[1] * l3,
           wa[2] * l1 + wb[2] * l2 + wc[2] * l3,
-        ]);
+        ], i, l1, l2, l3);
       }
     }
   }
 }
 
 /** Pixel mask of a face: its bounding rect plus 1 bit per covered texel. */
-export function faceMask(face: SurfaceFace): { x: number; y: number; w: number; h: number; bits: Uint8Array; count: number } {
+export function faceMask(face: SurfaceFace, strict = false): { x: number; y: number; w: number; h: number; bits: Uint8Array; count: number } {
   const xs = face.px.map((p) => p[0]), ys = face.px.map((p) => p[1]);
   const x = Math.max(0, Math.floor(Math.min(...xs)));
   const y = Math.max(0, Math.floor(Math.min(...ys)));
@@ -207,7 +208,7 @@ export function faceMask(face: SurfaceFace): { x: number; y: number; w: number; 
   forEachTexel(face, (tx, ty) => {
     const i = (ty - y) * w + (tx - x);
     if (i >= 0 && i < bits.length && !bits[i]) { bits[i] = 1; count++; }
-  });
+  }, strict);
   return { x, y, w, h, bits, count };
 }
 
