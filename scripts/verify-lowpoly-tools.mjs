@@ -251,6 +251,33 @@ try {
     const q2 = await tool('palette', { action: 'quantize', texture: 'q_tex', palette: 'pico8', dither: 'bayer4' });
     check('quantize to pico8 with dither', !q2.isError && q2.json?.colors_after <= 16, `after=${q2.json?.colors_after}`);
   }
+
+  // ── 7/8. compare_reference + project_reference ────────────────────────────
+  if (want('reference')) {
+    const dir = process.env.REF_DIR;
+    if (!dir) throw new Error('set REF_DIR to a folder with ref_bar.png and ref_split.png');
+    const ids = await bb(`Project.elements.map(e => e.uuid)`);
+    if (Array.isArray(ids) && ids.length) await tool('delete_elements', { ids });
+    await tool('add_cubes', { cubes: [{ name: 'bar', from: [-2, 0, -2], to: [2, 20, 2] }] });
+    const good = await tool('compare_reference', { image: `${dir}/ref_bar.png`, view: 'front' });
+    check('compare_reference: matching proportions → high IoU', !good.isError && good.json?.iou > 0.9, good.isError ? good.text.slice(0, 300) : `iou=${good.json?.iou} aspect=${JSON.stringify(good.json?.aspect_ratio)}`);
+    await tool('update_elements', { elements: [{ id: 'bar', from: [-4, 0, -2], to: [4, 20, 2] }] });
+    const wide = await tool('compare_reference', { image: `${dir}/ref_bar.png`, view: 'front' });
+    check('compare_reference: twice too wide → low IoU + WIDER advice', !wide.isError && wide.json?.iou < 0.7 && /WIDER/.test(JSON.stringify(wide.json?.advice)), `iou=${wide.json?.iou} ${JSON.stringify(wide.json?.advice)?.slice(0, 160)}`);
+
+    await tool('update_elements', { elements: [{ id: 'bar', from: [-4, 0, -2], to: [4, 16, 2] }] });
+    await tool('add_cubes', { cubes: [{ name: 'blocker', from: [-1, 6, -6], to: [1, 8, -4] }] });
+    await tool('unwrap_mesh', { elements: ['bar', 'blocker'], pixel_density: 64, name: 'proj_tex', keep_paint: false });
+    await tool('paint_faces', { targets: [{ element: 'bar', color: '#00ff00' }, { element: 'blocker', color: '#00ff00' }] });
+    const pr = await tool('project_reference', { image: `${dir}/ref_split.png`, view: 'front', elements: ['bar'] });
+    check('project_reference paints visible texels, skips hidden ones', !pr.isError && pr.json?.painted_texels > 100 && pr.json?.hidden_texels > 0, pr.text.slice(0, 300));
+    const cols = await bb(`(() => { const c = Cube.all.find(c => c.name === 'bar'); const tex = Texture.all.find(t => t.name.startsWith('proj_tex'));
+      const fx = tex.width / tex.getUVWidth(); const ctx = tex.canvas.getContext('2d'); const out = {};
+      for (const k of ['north', 'south']) { const f = c.faces[k]; const x0 = Math.min(f.uv[0], f.uv[2]) * fx, x1 = Math.max(f.uv[0], f.uv[2]) * fx, y = (f.uv[1] + f.uv[3]) / 2 * fx;
+        const g = (x) => { const d = ctx.getImageData(Math.floor(x), Math.floor(y), 1, 1).data; return d[0] > 150 ? 'R' : d[2] > 150 ? 'B' : d[1] > 150 ? 'G' : '?'; };
+        out[k] = g(x0 + 2) + g(x1 - 2); } return out; })()`);
+    check('front face got red + blue halves, back face untouched', cols && /R/.test(cols.north) && /B/.test(cols.north) && cols.south === 'GG', JSON.stringify(cols));
+  }
 } catch (err) {
   check('no exception', false, err.stack || err.message);
 } finally {
