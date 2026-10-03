@@ -836,6 +836,29 @@ export function registerTools(server: McpServer) {
     annotations: mutating,
   }, forward('bake_texture'));
 
+  server.registerTool('palette', {
+    title: 'Colour ramps & palette lock',
+    description: 'Colour discipline for pixel-art textures.\n- ramp {colors: ["#base", ...], shadows (2), highlights (2), ramp?}: build a hue-shifting ramp per base colour (shadows darker + cooler + slightly more saturated, highlights lighter + warmer + less saturated). Returns the hexes and a swatch image — pick flat colours and accents from these so the whole character shares one coherent palette.\n- extract {texture, max_colors?}: unique colour count, most used colours, and a reduced palette.\n- quantize {texture, palette, layer?, dither?}: snap every pixel to a palette — "auto" (median cut to max_colors, default 24), "ramps" (ramps from "colors"), a built-in (pico8, sweetie16, endesga32, db32, aap64, resurrect64, apollo) or an array of hexes. Run it last to clean up stray colours from painting/baking/projection. With texture layers it works on the given (or active) layer.',
+    inputSchema: {
+      action: z.enum(['ramp', 'extract', 'quantize']),
+      colors: z.array(z.string()).optional().describe('ramp / quantize "ramps": base colours'),
+      color: z.string().optional(),
+      shadows: z.number().optional().describe('Shadow steps per ramp'),
+      highlights: z.number().optional().describe('Highlight steps per ramp'),
+      ramp: z.object({
+        step: z.number().optional(), hue_shift: z.number().optional(), shadow_hue: z.number().optional(), highlight_hue: z.number().optional(),
+      }).optional(),
+      texture: z.string().optional(),
+      layer: z.string().optional(),
+      palette: z.union([z.string(), z.array(z.string())]).optional().describe('quantize target: "auto", "ramps", a built-in name, or hex colours'),
+      max_colors: z.number().optional(),
+      dither: z.enum(['none', 'bayer2', 'bayer4', 'bayer8']).optional(),
+      dither_strength: z.number().optional().describe('0-1, default 0.5'),
+      binary_alpha: z.boolean().optional().describe('quantize: snap alpha to 0/255 (default true)'),
+    },
+    annotations: mutating,
+  }, forward('palette'));
+
   // ───────────────────────────── animation ─────────────────────────────
 
   server.registerTool('create_animation', {
