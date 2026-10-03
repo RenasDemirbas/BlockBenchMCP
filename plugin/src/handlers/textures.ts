@@ -1,16 +1,43 @@
 // Textures: create, list, fetch, apply, paint (declarative primitives),
 // face painting, fur ops (jagged_edge/noise), resolution.
 import { register, fail, requireProject } from '../registry';
-import { resolveNode, collectCubes, resolveTexture, describeTexture, clampInt, hash01, textureCoverage, FACE_KEYS } from '../util';
+import { resolveNode, resolveTexture, describeTexture, clampInt, hash01, textureCoverage, FACE_KEYS } from '../util';
 import { unthrottledTimersActive } from '../timers';
 import { paintTarget, commitBitmap, findLayer } from './layers';
+import { collectSurfaceElements, surfaceFaces, faceMask, forEachTexel, SurfaceFace } from '../surface';
 
 type PreparedOp = {
   op: any;
   map: (pt: number[]) => [number, number];
   /** Face geometry for targeted ops: pixel rect, world Y span, v-flip. */
-  geo: { rect: number[]; worldY: [number, number]; vFlipped: boolean; rotated: boolean } | null;
+  geo: {
+    rect: number[]; worldY: [number, number]; vFlipped: boolean; rotated: boolean;
+    /** Mesh faces: the UV polygon's texel mask — paint outside it is reverted. */
+    mask?: ReturnType<typeof faceMask>;
+    surf?: SurfaceFace;
+  } | null;
 };
+
+/**
+ * Face keys a target selects on one element. Cube direction names also work
+ * on meshes: they pick the faces whose world normal points mostly that way.
+ */
+export function targetFaceKeys(el: any, faces: string[] | 'all'): string[] {
+  if (el instanceof Cube) return faces === 'all' ? FACE_KEYS.slice() : faces.filter((k) => FACE_KEYS.includes(k));
+  const all = Object.keys(el.faces);
+  if (faces === 'all') return all;
+  const direct = faces.filter((k) => el.faces[k]);
+  const dirs = faces.filter((k) => FACE_KEYS.includes(k));
+  if (!dirs.length) return direct;
+  const byDir = new Set(direct);
+  for (const f of surfaceFaces([el])) {
+    const [x, y, z] = f.normal;
+    const ax = Math.abs(x), ay = Math.abs(y), az = Math.abs(z);
+    const dir = ay >= ax && ay >= az ? (y > 0 ? 'up' : 'down') : ax >= az ? (x > 0 ? 'east' : 'west') : (z > 0 ? 'south' : 'north');
+    if (dirs.includes(dir)) byDir.add(f.key);
+  }
+  return [...byDir];
+}
 
 type GradientStop = { at: number; color: string; opacity?: number };
 
@@ -232,12 +259,22 @@ function faceCropRegion(params: any, explicitTexture: any) {
   const keys: string[] = params.face
     ? [params.face]
     : (!params.faces || params.faces === 'all' ? FACE_KEYS : params.faces);
-  for (const k of keys) {
-    if (!FACE_KEYS.includes(k)) fail(`Unknown face key "${k}". Valid: ${FACE_KEYS.join(', ')}.`);
-  }
-  const cubes = collectCubes(params.element, 'get_texture');
+
+  const els = collectSurfaceElements(params.element, 'get_texture');
+  const cubes = els.filter((e: any) => e instanceof Cube);
 
   const byTexture = new Map<any, { label: string; uv: number[] }[]>();
+  for (const mesh of els.filter((e: any) => e instanceof Mesh)) {
+    const wanted = params.face ? [params.face] : (!params.faces || params.faces === 'all' ? 'all' : params.faces);
+    const sfs = surfaceFaces([mesh], { faces: targetFaceKeys(mesh, wanted), texture: explicitTexture || undefined });
+    for (const f of sfs) {
+      // Express the polygon's bounding rect in UV units like a cube face.
+      const fx = f.tex.width / f.tex.getUVWidth(), fy = f.tex.height / f.tex.getUVHeight();
+      const xs = f.px.map((p) => p[0] / fx), ys = f.px.map((p) => p[1] / fy);
+      if (!byTexture.has(f.tex)) byTexture.set(f.tex, []);
+      byTexture.get(f.tex)!.push({ label: `${mesh.name}.${f.key}`, uv: [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)] });
+    }
+  }
   for (const cube of cubes) {
     for (const k of keys) {
       const face = cube.faces[k];
@@ -405,6 +442,9 @@ register('paint_texture', (params) => {
       lo = Math.min(lo, el.from[1], el.to[1]);
       hi = Math.max(hi, el.from[1], el.to[1]);
     }
+    for (const f of surfaceFaces(Mesh.all)) {
+      for (const p of f.world) { lo = Math.min(lo, p[1]); hi = Math.max(hi, p[1]); }
+    }
     return Number.isFinite(lo) && hi > lo ? [lo, hi] : [0, 1];
   })();
 
@@ -416,19 +456,20 @@ register('paint_texture', (params) => {
     const t = op && op.target;
     if (!t || (t.face && !t.faces)) { expandedOps.push(op); return; }
     if (!t.faces) fail(`ops[${i}]: "target" needs "face" (one key) or "faces" ("all" or a list of keys).`);
-    const keys: string[] = t.faces === 'all' ? FACE_KEYS.slice() : t.faces;
-    if (!Array.isArray(keys) || !keys.length) fail(`ops[${i}]: "target.faces" must be "all" or a non-empty array of face keys.`);
-    for (const k of keys) {
-      if (!FACE_KEYS.includes(k)) fail(`ops[${i}]: unknown face key "${k}". Valid: ${FACE_KEYS.join(', ')}.`);
-    }
-    const cubes = collectCubes(t.element, `ops[${i}]`);
-    for (const cube of cubes) {
-      for (const k of keys) {
-        const face = cube.faces[k];
+    if (t.faces !== 'all' && (!Array.isArray(t.faces) || !t.faces.length)) fail(`ops[${i}]: "target.faces" must be "all" or a non-empty array of face keys.`);
+    const els = collectSurfaceElements(t.element, `ops[${i}]`);
+    let matched = 0;
+    for (const el of els) {
+      for (const k of targetFaceKeys(el, t.faces)) {
+        const face = el.faces[k];
         if (!face) continue;
         if (face.texture === null || face.enabled === false) continue; // hidden face
-        expandedOps.push({ ...op, target: { element: cube.uuid, face: k } });
+        matched++;
+        expandedOps.push({ ...op, target: { element: el.uuid, face: k } });
       }
+    }
+    if (!matched && t.faces !== 'all') {
+      fail(`ops[${i}]: no face matched ${JSON.stringify(t.faces)}. Cube faces: ${FACE_KEYS.join(', ')}; mesh faces: their keys (get_element) or a direction name, which picks the faces pointing that way.`);
     }
   });
   if (!expandedOps.length) fail('No paintable faces matched the given ops.');
@@ -473,7 +514,35 @@ register('paint_texture', (params) => {
     let geo: any = null;
     if (op.target) {
       const node = resolveNode(op.target.element);
-      if (!(node instanceof Cube)) fail('paint ops "target" currently supports cube faces. For meshes paint with absolute pixel coordinates.');
+      if (node instanceof Mesh) {
+        let key = op.target.face;
+        if (!node.faces[key]) {
+          const keys = FACE_KEYS.includes(key) ? targetFaceKeys(node, [key]) : [];
+          if (keys.length !== 1) fail(`Mesh "${node.name}" has ${keys.length ? `${keys.length} faces pointing ${key}` : `no face "${key}"`} — use "faces" (plural) to paint several, or a face key from get_element.`);
+          key = keys[0];
+        }
+        const surf = surfaceFaces([node], { faces: [key], texture: explicitTexture || undefined })[0]
+          || surfaceFaces([node], { faces: [key] })[0];
+        if (!surf) fail(`Mesh face "${node.name}.${key}" has no texture assigned. Assign one (apply_texture) or pass "texture".`);
+        if (explicitTexture && surf.tex !== explicitTexture) {
+          fail(`Face "${node.name}.${key}" is mapped to texture "${surf.tex.name}", not "${explicitTexture.name}" — omit "texture" or pass the face's own texture.`);
+        }
+        tex = surf.tex;
+        const mask = faceMask(surf);
+        if (!mask.count) fail(`Mesh face "${node.name}.${key}" covers no texel centre (its UV polygon is degenerate or under 1 px). Run unwrap_mesh (or generate_texture_template) first.`);
+        map = (pt) => [Math.round(mask.x + pt[0] * mask.w), Math.round(mask.y + pt[1] * mask.h)];
+        const ys = surf.world.map((p) => p[1]);
+        geo = {
+          rect: [mask.x, mask.y, mask.w, mask.h],
+          worldY: [Math.min(...ys), Math.max(...ys)],
+          vFlipped: false,
+          rotated: false,
+          mask,
+          surf,
+        };
+        return { op, tex, map, geo };
+      }
+      if (!(node instanceof Cube)) fail(`paint ops "target" supports cube and mesh faces; "${node.name}" is a ${node.type}.`);
       const face = node.faces[op.target.face];
       if (!face) fail(`Cube "${node.name}" has no face "${op.target.face}". Valid: north, south, east, west, up, down.`);
       const faceTex = face.getTexture?.() || null;
@@ -528,7 +597,7 @@ register('paint_texture', (params) => {
     try {
     ctx.imageSmoothingEnabled = false;
     ctx.translate(-ox, -oy);
-    for (const { op, map, geo } of list) {
+    const drawOp = (op: any, map: (pt: number[]) => [number, number], geo: PreparedOp['geo']) => {
       const color = op.color || '#000000';
       ctx.globalAlpha = op.opacity ?? 1;
       ctx.fillStyle = color;
@@ -598,6 +667,17 @@ register('paint_texture', (params) => {
           for (const s of stops) grad.addColorStop(Math.max(0, Math.min(1, s.at)), stopColor(s));
         };
 
+        if (op.space === 'world' && geo?.surf) {
+          // Mesh face: UVs can be any shape, so sample the ramp per texel from
+          // its interpolated world height.
+          const [my0, my1] = op.range && op.range.length === 2 ? op.range : modelY;
+          forEachTexel(geo.surf, (tx, ty, w) => {
+            const t = my1 === my0 ? 0 : 1 - (w[1] - my0) / (my1 - my0);
+            ctx.fillStyle = sampleStops(stops, Math.max(0, Math.min(1, t)));
+            ctx.fillRect(tx, ty, 1, 1);
+          });
+          return;
+        }
         if (op.space === 'world' && geo) {
           // Lay the gradient line along the MODEL's Y extent rather than this
           // face's box. The line runs past the face rect, so neighbouring cubes
@@ -621,8 +701,7 @@ register('paint_texture', (params) => {
             ctx.fillStyle = grad;
           }
           ctx.fillRect(rx, ry, rw, rh);
-          opCount++;
-          continue;
+          return;
         }
 
         // Face-local (or absolute pixel) sweep; a targeted op defaults to top→bottom.
@@ -739,6 +818,23 @@ register('paint_texture', (params) => {
           }
         }
       }
+    };
+    for (const { op, map, geo } of list) {
+      const m = geo?.mask;
+      const before = m ? ctx.getImageData(m.x - ox, m.y - oy, m.w, m.h) : null;
+      drawOp(op, map, geo);
+      if (m && before) {
+        // Revert every pixel of the face's bounding rect that is not inside
+        // its UV polygon — pixel-exact clipping without anti-aliased edges.
+        const after = ctx.getImageData(m.x - ox, m.y - oy, m.w, m.h);
+        for (let i = 0; i < m.bits.length; i++) {
+          if (m.bits[i]) continue;
+          const j = i * 4;
+          after.data[j] = before.data[j]; after.data[j + 1] = before.data[j + 1];
+          after.data[j + 2] = before.data[j + 2]; after.data[j + 3] = before.data[j + 3];
+        }
+        ctx.putImageData(after, m.x - ox, m.y - oy);
+      }
       opCount++;
     }
     } finally {
@@ -822,26 +918,31 @@ register('paint_faces', (params) => {
     fail('Pass "targets": [{element (cube or group), faces?: ["north",...] | "all", color, opacity?}].');
   }
   const fallbackTex = params.texture ? resolveTexture(params.texture) : null;
-  const jobs = new Map<any, { face: any; color: string; opacity: number; label: string }[]>();
+  const jobs = new Map<any, { face: any; surf?: SurfaceFace; color: string; opacity: number; label: string }[]>();
   const skipped: string[] = [];
   const painted: string[] = [];
 
   for (const target of params.targets) {
     if (!target.color) fail('Each target needs a "color" (CSS string).');
-    const cubes = collectCubes(target.element, 'paint_faces');
-    for (const cube of cubes) {
-      const keys: string[] = !target.faces || target.faces === 'all' ? Object.keys(cube.faces) : target.faces;
+    const els = collectSurfaceElements(target.element, 'paint_faces');
+    for (const cube of els) {
+      const wanted = !target.faces || target.faces === 'all' ? 'all' : target.faces;
+      if (cube instanceof Cube && wanted !== 'all') {
+        for (const k of wanted) if (!cube.faces[k]) fail(`Cube "${cube.name}" has no face "${k}". Valid: north, south, east, west, up, down.`);
+      }
+      const keys = targetFaceKeys(cube, wanted);
       for (const fkey of keys) {
         const face = cube.faces[fkey];
-        if (!face) fail(`Cube "${cube.name}" has no face "${fkey}". Valid: north, south, east, west, up, down.`);
+        if (!face) continue;
         if (face.texture === null || face.enabled === false) continue; // hidden face
-        const tex = face.getTexture?.() || fallbackTex;
+        const surf = cube instanceof Mesh ? surfaceFaces([cube], { faces: [fkey], texture: fallbackTex || undefined })[0] : undefined;
+        const tex = surf?.tex || face.getTexture?.() || fallbackTex;
         if (!tex) {
           skipped.push(`${cube.name}.${fkey} (no texture — pass "texture" as fallback)`);
           continue;
         }
         if (!jobs.has(tex)) jobs.set(tex, []);
-        jobs.get(tex)!.push({ face, color: target.color, opacity: target.opacity ?? 1, label: `${cube.name}.${fkey}` });
+        jobs.get(tex)!.push({ face, surf, color: target.color, opacity: target.opacity ?? 1, label: `${cube.name}.${fkey}` });
       }
     }
   }
@@ -861,6 +962,19 @@ register('paint_faces', (params) => {
       const fx = tex.width / tex.getUVWidth();
       const fy = tex.height / tex.getUVHeight();
       for (const job of list) {
+        if (job.surf) {
+          // Mesh face: fill exactly the texels inside its UV polygon.
+          const surf = job.surf;
+          forEachTexel(surf, (x, y) => {
+            ctx.globalAlpha = 1;
+            if (job.opacity >= 1) ctx.clearRect(x, y, 1, 1);
+            ctx.globalAlpha = job.opacity;
+            ctx.fillStyle = job.color;
+            ctx.fillRect(x, y, 1, 1);
+          });
+          painted.push(job.label);
+          continue;
+        }
         const x = Math.round(Math.min(job.face.uv[0], job.face.uv[2]) * fx);
         const y = Math.round(Math.min(job.face.uv[1], job.face.uv[3]) * fy);
         const w = Math.max(1, Math.round(Math.abs(job.face.uv[2] - job.face.uv[0]) * fx));

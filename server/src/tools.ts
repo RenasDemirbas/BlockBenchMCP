@@ -18,6 +18,8 @@ const mutating = { readOnlyHint: false, destructiveHint: false, idempotentHint: 
 const destructive = { readOnlyHint: false, destructiveHint: true, openWorldHint: false };
 
 const faceKeys = ['north', 'south', 'east', 'west', 'up', 'down'] as const;
+// Cube face directions, or mesh face keys — a direction on a mesh picks the faces pointing that way.
+const anyFace = () => z.string().describe('Cube: north/south/east/west/up/down. Mesh: a face key from get_element, or a direction name (= every face whose normal points mostly that way)');
 const cubeFaceSchema = z.object({
   uv: z.array(z.number()).length(4).optional().describe('Face UV rect [x1, y1, x2, y2] in UV units (0..texture UV size). Swap x1/x2 to mirror.'),
   rotation: z.number().optional().describe('UV rotation: 0, 90, 180 or 270'),
@@ -506,9 +508,9 @@ export function registerTools(server: McpServer) {
     inputSchema: {
       id: z.string().optional().describe('Texture name/uuid (default: selected, or the texture the cropped faces use)'),
       max_size: z.number().optional().describe('Max returned dimension in px, default 512. A crop is scaled UP to fill it.'),
-      element: z.string().optional().describe('Crop to this cube/group\'s UV region ("*" = every cube in the model)'),
-      face: z.enum(faceKeys).optional().describe('Crop to one face of that element'),
-      faces: z.union([z.array(z.enum(faceKeys)), z.literal('all')]).optional().describe('Crop to several faces (default: all faces of the element)'),
+      element: z.string().optional().describe('Crop to this cube/mesh/group\'s UV region ("*" = every cube and mesh in the model)'),
+      face: anyFace().optional().describe('Crop to one face of that element'),
+      faces: z.union([z.array(anyFace()), z.literal('all')]).optional().describe('Crop to several faces (default: all faces of the element)'),
       padding: z.number().optional().describe('Extra UV units around the crop, default 0 — use 1-2 to see neighbouring pixels'),
       layer: z.string().optional().describe('Show only this texture layer (name/uuid) instead of the composite'),
     },
@@ -596,22 +598,22 @@ export function registerTools(server: McpServer) {
         root_color: z.string().optional().describe('strands: color of that root band, default the op color'),
         seed: z.number().optional().describe('jagged_edge/noise/strands: deterministic seed, default 1'),
         target: z.object({
-          element: z.string().describe('Cube or GROUP name/uuid (a group recurses into all its cubes), or "*" for every cube in the model'),
-          face: z.enum(faceKeys).optional().describe('One face key'),
-          faces: z.union([z.array(z.enum(faceKeys)), z.literal('all')]).optional().describe('Several face keys, or "all" — expands the op per face'),
-        }).optional().describe('Paint onto cube faces using normalized 0-1 coordinates. Each op paints onto the FACE\'S OWN texture (multi-texture formats safe). Pass "face" for one, "faces" for many.'),
+          element: z.string().describe('Cube, MESH or GROUP name/uuid (a group recurses into all its cubes and meshes), or "*" for the whole model'),
+          face: anyFace().optional().describe('One face'),
+          faces: z.union([z.array(anyFace()), z.literal('all')]).optional().describe('Several faces, or "all" — expands the op per face. On meshes ["up"] = every face pointing up.'),
+        }).optional().describe('Paint onto faces using normalized 0-1 coordinates. Each op paints onto the FACE\'S OWN texture (multi-texture formats safe). Pass "face" for one, "faces" for many. Mesh faces: 0-1 spans the UV polygon\'s bounding box and paint is clipped pixel-exactly to the polygon; "space":"world" gradients are sampled per texel from its world height.'),
       })).min(1),
     },
     annotations: mutating,
   }, forward('paint_texture'));
 
   server.registerTool('paint_faces', {
-    title: 'Paint cube faces solid colors',
-    description: 'Fill whole cube faces with solid colors in one call — "paint this face of this cube this color" with zero UV math. Pass a cube, a GROUP (recurses into all its cubes), or "*" for every cube in the model. Each face\'s own texture and UV rect are resolved automatically; opacity 1 overwrites, <1 blends. NOTE: faces sharing UV space (e.g. mirrored limbs reusing a rect) get painted together — give faces their own UV space first (generate_texture_template) for independent colors.',
+    title: 'Paint faces solid colors',
+    description: 'Fill whole cube or mesh faces with solid colors in one call — "paint this face of this cube this color" with zero UV math. Pass a cube, a mesh, a GROUP (recurses into all its cubes and meshes), or "*" for the whole model. Mesh faces are filled exactly inside their UV polygon. Each face\'s own texture and UV rect are resolved automatically; opacity 1 overwrites, <1 blends. NOTE: faces sharing UV space (e.g. mirrored limbs reusing a rect) get painted together — give faces their own UV space first (generate_texture_template) for independent colors.',
     inputSchema: {
       targets: z.array(z.object({
-        element: z.string().describe('Cube or group name/uuid, or "*" for every cube in the model. A rig\'s top bone is often EMPTY — target a group that actually holds cubes, or "*".'),
-        faces: z.union([z.array(z.enum(faceKeys)), z.literal('all')]).optional().describe('Face keys, default "all"'),
+        element: z.string().describe('Cube, mesh or group name/uuid, or "*" for the whole model. A rig\'s top bone is often EMPTY — target a group that actually holds elements, or "*".'),
+        faces: z.union([z.array(anyFace()), z.literal('all')]).optional().describe('Face keys, default "all". On meshes a direction ("up") picks every face pointing that way.'),
         color: z.string().describe('CSS color'),
         opacity: z.number().optional().describe('0-1, default 1 (overwrite)'),
       })).min(1),
@@ -679,7 +681,7 @@ export function registerTools(server: McpServer) {
 
   server.registerTool('inspect_uv', {
     title: 'Inspect UV mapping',
-    description: 'Diagnose how the texture actually maps onto the model — the first thing to run when a texture "looks wrong on the model" but the texture image itself looks fine. Reports, per cube face: UV rotation, mirrored rects, rects whose aspect does not match the face (stretched or turned 90°), UV rects SHARED by several faces (painting one repaints all), faces with no texture, fully transparent pixels inside a face rect (they render see-through), atlas coverage, and the bitmap-to-UV-grid scale (how many bitmap pixels one UV unit is — needed for absolute paint coordinates). Returns a "findings" list with severities plus the raw counts. NOTE: mirroring on "up"/"down" faces is Blockbench\'s normal box unwrap, not a defect.',
+    description: 'Diagnose how the texture actually maps onto the model — the first thing to run when a texture "looks wrong on the model" but the texture image itself looks fine. Reports, per cube face: UV rotation, mirrored rects, rects whose aspect does not match the face (stretched or turned 90°), UV rects SHARED by several faces (painting one repaints all), faces with no texture, fully transparent pixels inside a face rect (they render see-through), atlas coverage, and the bitmap-to-UV-grid scale (how many bitmap pixels one UV unit is — needed for absolute paint coordinates). Meshes: degenerate (unpaintable) UV polygons, texels shared by several faces, transparent texels inside faces. Plus texel density (texture px per model unit) min/median/max across cubes and meshes, flagging faces >1.5x off the median. Returns a "findings" list with severities plus the raw counts. NOTE: mirroring on "up"/"down" faces is Blockbench\'s normal box unwrap, not a defect.',
     inputSchema: {
       texture: z.string().optional().describe('Limit the report to one texture (default: all)'),
       scan_pixels: z.boolean().optional().describe('Scan each face rect for transparent pixels (default true; set false for a fast structural-only check on huge models)'),
