@@ -11,6 +11,7 @@ import './handlers/uv';
 import './handlers/unwrap';
 import './handlers/meshedit';
 import './handlers/meshgen';
+import './handlers/bake';
 import './handlers/animation';
 import './handlers/rigging';
 import './handlers/camera';

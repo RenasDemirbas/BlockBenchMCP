@@ -157,11 +157,17 @@ export function surfaceFaces(elements: any[], opts: { faces?: string[] | 'all'; 
   return opts.texture ? out.filter((f) => f.tex === opts.texture) : out;
 }
 
+export type TexelMode = 'center' | 'strict' | 'conservative';
+
 /**
- * Visit every texel whose CENTRE lies inside the face's UV polygon, with the
- * interpolated world position. Each texel is visited once per face.
+ * Visit the face's texels with their interpolated world position, once each.
+ *  center: texel centre inside the UV polygon (edges inclusive)
+ *  strict: centre strictly inside (a centre on a shared edge belongs to neither)
+ *  conservative: every texel the polygon touches — use it for PAINTING, so the
+ *    GPU never samples an unpainted texel along an island's border.
  */
-export function forEachTexel(face: SurfaceFace, cb: (x: number, y: number, world: P3, tri: number, l1: number, l2: number, l3: number) => void, strict = false) {
+export function forEachTexel(face: SurfaceFace, cb: (x: number, y: number, world: P3, tri: number, l1: number, l2: number, l3: number) => void, mode: TexelMode = 'center') {
+  const strict = mode === 'strict', conservative = mode === 'conservative';
   const n = face.px.length;
   const seen = new Set<number>();
   const W = face.tex.width, H = face.tex.height;
@@ -170,10 +176,11 @@ export function forEachTexel(face: SurfaceFace, cb: (x: number, y: number, world
     const wa = face.world[0], wb = face.world[i], wc = face.world[i + 1];
     const den = (b[1] - c[1]) * (a[0] - c[0]) + (c[0] - b[0]) * (a[1] - c[1]);
     if (Math.abs(den) < 1e-9) continue;
-    const x0 = Math.max(0, Math.floor(Math.min(a[0], b[0], c[0])));
-    const x1 = Math.min(W - 1, Math.ceil(Math.max(a[0], b[0], c[0])));
-    const y0 = Math.max(0, Math.floor(Math.min(a[1], b[1], c[1])));
-    const y1 = Math.min(H - 1, Math.ceil(Math.max(a[1], b[1], c[1])));
+    const pad = conservative ? 1 : 0;
+    const x0 = Math.max(0, Math.floor(Math.min(a[0], b[0], c[0])) - pad);
+    const x1 = Math.min(W - 1, Math.ceil(Math.max(a[0], b[0], c[0])) + pad);
+    const y0 = Math.max(0, Math.floor(Math.min(a[1], b[1], c[1])) - pad);
+    const y1 = Math.min(H - 1, Math.ceil(Math.max(a[1], b[1], c[1])) + pad);
     for (let y = y0; y <= y1; y++) {
       for (let x = x0; x <= x1; x++) {
         const px = x + 0.5, py = y + 0.5;
@@ -182,7 +189,13 @@ export function forEachTexel(face: SurfaceFace, cb: (x: number, y: number, world
         const l3 = 1 - l1 - l2;
         // strict: skip centres lying on an edge (shared with the neighbour face).
         const e = strict ? 1e-4 : -1e-6;
-        if (l1 < e || l2 < e || l3 < e) continue;
+        if (l1 < e || l2 < e || l3 < e) {
+          // A texel square overlaps the triangle when its centre is within
+          // half a diagonal of it.
+          if (!conservative) continue;
+          const pc: P2 = [px, py];
+          if (Math.min(segDist(pc, a, b), segDist(pc, b, c), segDist(pc, c, a)) > 0.7072) continue;
+        }
         const id = y * W + x;
         if (seen.has(id)) continue;
         seen.add(id);
@@ -197,18 +210,20 @@ export function forEachTexel(face: SurfaceFace, cb: (x: number, y: number, world
 }
 
 /** Pixel mask of a face: its bounding rect plus 1 bit per covered texel. */
-export function faceMask(face: SurfaceFace, strict = false): { x: number; y: number; w: number; h: number; bits: Uint8Array; count: number } {
+export function faceMask(face: SurfaceFace, mode: TexelMode = 'center'): { x: number; y: number; w: number; h: number; bits: Uint8Array; count: number } {
   const xs = face.px.map((p) => p[0]), ys = face.px.map((p) => p[1]);
-  const x = Math.max(0, Math.floor(Math.min(...xs)));
-  const y = Math.max(0, Math.floor(Math.min(...ys)));
-  const w = Math.max(1, Math.min(face.tex.width, Math.ceil(Math.max(...xs))) - x);
-  const h = Math.max(1, Math.min(face.tex.height, Math.ceil(Math.max(...ys))) - y);
+  const pad = mode === 'conservative' ? 1 : 0;
+  const x = Math.max(0, Math.floor(Math.min(...xs)) - pad);
+  const y = Math.max(0, Math.floor(Math.min(...ys)) - pad);
+  const w = Math.max(1, Math.min(face.tex.width, Math.ceil(Math.max(...xs)) + pad) - x);
+  const h = Math.max(1, Math.min(face.tex.height, Math.ceil(Math.max(...ys)) + pad) - y);
   const bits = new Uint8Array(w * h);
   let count = 0;
   forEachTexel(face, (tx, ty) => {
+    if (tx < x || ty < y || tx >= x + w || ty >= y + h) return;
     const i = (ty - y) * w + (tx - x);
-    if (i >= 0 && i < bits.length && !bits[i]) { bits[i] = 1; count++; }
-  }, strict);
+    if (!bits[i]) { bits[i] = 1; count++; }
+  }, mode);
   return { x, y, w, h, bits, count };
 }
 

@@ -226,7 +226,7 @@ register('inspect_uv', (params) => {
       const bmp = scanPixels ? bitmapOf(f.tex) : null;
       // Overlap is judged on interior texels only: a centre exactly on an
       // edge shared with the neighbouring face belongs to both.
-      const inner = faceMask(f, true);
+      const inner = faceMask(f, 'strict');
       let clear = 0;
       for (let i = 0; i < m.bits.length; i++) {
         if (!m.bits[i]) continue;

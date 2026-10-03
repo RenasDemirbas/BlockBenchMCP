@@ -805,6 +805,37 @@ export function registerTools(server: McpServer) {
     annotations: mutating,
   }, forward('unwrap_mesh'));
 
+  server.registerTool('bake_texture', {
+    title: 'Bake hand-painted shading into the texture',
+    description: 'Paint lighting into the texture the way hand-painted low-poly / PS1 characters are shaded — no runtime lights needed. Works on cubes and meshes (any UV layout). Each pass contributes SHADE STEPS per texel; the sum is snapped to whole steps of a hue-shifting pixel-art ramp built from each texel\'s own flat colour (shadows darker + cooler + a bit more saturated, highlights lighter + warmer), so the result reads as deliberate pixel-art bands, not airbrush.\nPasses (default light + ao + edges):\n- light {direction: [x,y,z] TOWARD the light (default [0.5,1,-0.7]: above, front-left), shadow: steps at the dark side (1.5), highlight: steps facing the light (1), wrap 0-1 (0.3), midpoint 0-1 (0.5) where shading turns from shadow to highlight, full 0-1 (0.85) where the highlight is complete} — per-face normals give the faceted low-poly look.\n- ao {distance units (6), samples (24), strength: steps of darkening in a 90° corner (1.5)} — ray-traced ambient occlusion against the WHOLE model: armpits, under the hat brim, between fingers, where the coat meets the trousers.\n- edges {width px (1), highlight (1) on convex edges, cavity (1) on concave creases, boundary (1) on open edges like a cape hem, angle (25° — flatter edges are ignored)} — the light rim on edges and dark crease lines.\n- gradient {bottom (-1), top (0), range?: [y0, y1]} — darker toward the feet.\n- noise {amount (0.3), scale px (1), seed} — painterly grain that breaks up bands.\nWORKFLOW: paint flat base colours (paint_faces / paint_texture), then bake into a separate "layer" (e.g. "shading"): shading is then read from the bottom layer\'s flat colours, so you can tweak and re-bake without compounding. Without "layer" it overwrites the base image.',
+    inputSchema: {
+      elements: z.array(z.string()).optional().describe('Cubes/meshes/groups to bake (default whole model)'),
+      texture: z.string().optional().describe('Only faces using this texture'),
+      layer: z.string().optional().describe('Write into this texture layer (created if missing). Recommended: "shading".'),
+      source: z.string().optional().describe('Layer holding the flat colours (default: the bottom layer when "layer" is set, else the composite)'),
+      passes: z.array(z.object({
+        type: z.enum(['light', 'ao', 'edges', 'gradient', 'noise']),
+        direction: vec3().optional(),
+        shadow: z.number().optional(), highlight: z.number().optional(), wrap: z.number().optional(), midpoint: z.number().optional(), full: z.number().optional(),
+        distance: z.number().optional(), samples: z.number().optional(), strength: z.number().optional(),
+        width: z.number().optional(), cavity: z.number().optional(), boundary: z.number().optional(), angle: z.number().optional(),
+        bottom: z.number().optional(), top: z.number().optional(), range: vec2().optional(),
+        amount: z.number().optional(), scale: z.number().optional(), seed: z.number().optional(),
+      })).optional(),
+      max_shadow: z.number().optional().describe('Darkest step (default 3)'),
+      max_highlight: z.number().optional().describe('Brightest step (default 2)'),
+      dither: z.enum(['none', 'bayer2', 'bayer4', 'bayer8']).optional().describe('Ordered dither at band transitions (default none)'),
+      ramp: z.object({
+        step: z.number().optional().describe('Oklab lightness per step (0.13)'),
+        hue_shift: z.number().optional().describe('Degrees of hue shift per step (15)'),
+        shadow_hue: z.number().optional().describe('Hue shadows drift toward (270 = blue-violet)'),
+        highlight_hue: z.number().optional().describe('Hue highlights drift toward (90 = warm yellow)'),
+      }).optional(),
+      only_painted: z.boolean().optional().describe('Skip transparent texels (default true)'),
+    },
+    annotations: mutating,
+  }, forward('bake_texture'));
+
   // ───────────────────────────── animation ─────────────────────────────
 
   server.registerTool('create_animation', {
