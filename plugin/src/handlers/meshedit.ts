@@ -37,7 +37,7 @@ function faceEdges(face: any): [string, string][] {
  * Resolve a selection spec against a mesh:
  *  "all" | "previous" | {faces, facing, within, vertices, edges, where}
  */
-function resolveSelection(mesh: any, spec: any, previous: Sel | null, label: string): Sel {
+export function resolveSelection(mesh: any, spec: any, previous: Sel | null, label: string): Sel {
   if (spec === 'previous') {
     if (!previous) fail(`${label}: "previous" needs an earlier step in the same call.`);
     return { faces: previous.faces.filter((k) => mesh.faces[k]), vertices: previous.vertices.filter((k) => mesh.vertices[k]), edges: previous.edges };
