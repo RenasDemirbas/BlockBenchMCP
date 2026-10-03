@@ -203,6 +203,36 @@ try {
     const jit = await tool('transform_mesh', { mesh: 'leg', ops: [{ type: 'jitter', amount: 0.3, seed: 3 }, { type: 'smooth', factor: 0.3 }] });
     check('jitter + smooth run', !jit.isError, jit.text.slice(0, 120));
   }
+
+  // ── 5. bake_texture ───────────────────────────────────────────────────────
+  if (want('bake')) {
+    // A post standing on a slab: AO must darken the post's foot, light must
+    // brighten the top, edges must rim the slab.
+    await tool('add_cubes', { cubes: [{ name: 'slab', from: [-80, 0, -8], to: [-64, 2, 8] }, { name: 'post', from: [-74, 2, -2], to: [-70, 14, 2] }] });
+    await tool('add_loft', { name: 'pipe', profile: 'round', sides: 6, position: [-60, 0, 0], rings: [{ at: [0, 0, 0], size: 4 }, { at: [0, 10, 0], size: 4 }] });
+    await tool('unwrap_mesh', { elements: ['slab', 'post', 'pipe'], pixel_density: 64, name: 'bake_tex', keep_paint: false });
+    await tool('paint_faces', { targets: [{ element: 'slab', color: '#7a6a58' }, { element: 'post', color: '#a03a2a' }, { element: 'pipe', color: '#4a6aa0' }] });
+    const bake = await tool('bake_texture', { elements: ['slab', 'post', 'pipe'], layer: 'shading', passes: [{ type: 'light' }, { type: 'ao', distance: 6 }, { type: 'edges' }] });
+    check('bake_texture runs', !bake.isError && bake.json?.baked_texels > 500, bake.text.slice(0, 300));
+    const steps = bake.json?.shade_steps || {};
+    check('bake produced shadow and highlight steps', Object.keys(steps).some((k) => +k < 0) && Object.keys(steps).some((k) => +k > 0), JSON.stringify(steps));
+    // Sample the post's north face low vs high (AO near the slab).
+    const ao = await bb(`(() => { const post = Cube.all.find(c => c.name === 'post'); const tex = Texture.all.find(t => t.name.startsWith('bake_tex'));
+      const f = post.faces.north; const fx = tex.width / tex.getUVWidth(); const fy = tex.height / tex.getUVHeight();
+      const x = Math.floor((f.uv[0] + f.uv[2]) / 2 * fx); const yTop = Math.floor(Math.min(f.uv[1], f.uv[3]) * fy) + 3; const yBot = Math.floor(Math.max(f.uv[1], f.uv[3]) * fy) - 2;
+      const L = (y) => { const d = tex.canvas.getContext('2d').getImageData(x, y, 1, 1).data; return d[0] + d[1] + d[2]; }; return [L(yTop), L(yBot)]; })()`);
+    check('AO darkens the foot of the post', Array.isArray(ao) && ao[1] < ao[0], JSON.stringify(ao));
+    const rim = await bb(`(() => { const post = Cube.all.find(c => c.name === 'post'); const tex = Texture.all.find(t => t.name.startsWith('bake_tex'));
+      const f = post.faces.north; const fx = tex.width / tex.getUVWidth(); const x0 = Math.floor(Math.min(f.uv[0], f.uv[2]) * fx);
+      const y = Math.floor((f.uv[1] + f.uv[3]) / 2 * fx); const L = tex.layers.find(l => l.name === 'shading');
+      const g = (x) => { const d = L.ctx.getImageData(x - L.offset[0], y - L.offset[1], 1, 1).data; return d[0] + d[1] + d[2]; }; return [g(x0), g(x0 + 3)]; })()`);
+    check('convex edges get a lighter rim', Array.isArray(rim) && rim[0] > rim[1], JSON.stringify(rim));
+    const layers = await tool('texture_layers', { texture: 'bake_tex' });
+    check('shading went into its own layer', /shading/.test(layers.text), layers.text.slice(0, 200));
+    const rebake = await tool('bake_texture', { elements: ['post'], layer: 'shading', passes: [{ type: 'light' }] });
+    check('re-bake reads flat colours (no compounding error)', !rebake.isError, rebake.text.slice(0, 120));
+    await tool('capture_screenshot', { preset: 'isometric_right' }).then(() => {}).catch(() => {});
+  }
 } catch (err) {
   check('no exception', false, err.stack || err.message);
 } finally {

@@ -550,12 +550,17 @@ register('paint_texture', (params) => {
           fail(`Face "${node.name}.${key}" is mapped to texture "${surf.tex.name}", not "${explicitTexture.name}" — omit "texture" or pass the face's own texture.`);
         }
         tex = surf.tex;
-        const mask = faceMask(surf);
+        const mask = faceMask(surf, 'conservative');
         if (!mask.count) fail(`Mesh face "${node.name}.${key}" covers no texel centre (its UV polygon is degenerate or under 1 px). Run unwrap_mesh (or generate_texture_template) first.`);
-        map = (pt) => [Math.round(mask.x + pt[0] * mask.w), Math.round(mask.y + pt[1] * mask.h)];
+        // Normalized 0-1 spans the UV polygon's own bounds (the mask is a
+        // texel wider all round so border texels get painted too).
+        const pxs = surf.px.map((p) => p[0]), pys = surf.px.map((p) => p[1]);
+        const bx = Math.floor(Math.min(...pxs)), by = Math.floor(Math.min(...pys));
+        const bw = Math.max(1, Math.ceil(Math.max(...pxs)) - bx), bh = Math.max(1, Math.ceil(Math.max(...pys)) - by);
+        map = (pt) => [Math.round(bx + pt[0] * bw), Math.round(by + pt[1] * bh)];
         const ys = surf.world.map((p) => p[1]);
         geo = {
-          rect: [mask.x, mask.y, mask.w, mask.h],
+          rect: [bx, by, bw, bh],
           worldY: [Math.min(...ys), Math.max(...ys)],
           vFlipped: false,
           rotated: false,
@@ -697,7 +702,7 @@ register('paint_texture', (params) => {
             const t = my1 === my0 ? 0 : 1 - (w[1] - my0) / (my1 - my0);
             ctx.fillStyle = sampleStops(stops, Math.max(0, Math.min(1, t)));
             ctx.fillRect(tx, ty, 1, 1);
-          });
+          }, 'conservative');
           return;
         }
         if (op.space === 'world' && geo) {
@@ -993,7 +998,7 @@ register('paint_faces', (params) => {
             ctx.globalAlpha = job.opacity;
             ctx.fillStyle = job.color;
             ctx.fillRect(x, y, 1, 1);
-          });
+          }, 'conservative');
           painted.push(job.label);
           continue;
         }

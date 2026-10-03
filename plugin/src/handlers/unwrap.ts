@@ -148,7 +148,7 @@ register('unwrap_mesh', async (params) => {
         img.data[di] = snap.data[si]; img.data[di + 1] = snap.data[si + 1];
         img.data[di + 2] = snap.data[si + 2]; img.data[di + 3] = snap.data[si + 3];
         transferred++;
-      });
+      }, 'conservative');
     }
     target.ctx.putImageData(img, 0, 0);
     commitBitmap(texture);
