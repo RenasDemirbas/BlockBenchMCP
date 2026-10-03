@@ -8,6 +8,7 @@ import './handlers/geometry';
 import './handlers/textures';
 import './handlers/layers';
 import './handlers/uv';
+import './handlers/unwrap';
 import './handlers/animation';
 import './handlers/rigging';
 import './handlers/camera';

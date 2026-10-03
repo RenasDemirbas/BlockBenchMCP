@@ -179,6 +179,54 @@ register('create_texture', async (params) => {
   return out;
 });
 
+/**
+ * Run Blockbench's template generator on the currently selected elements and
+ * resolve with the new texture once it has settled.
+ */
+export async function runTextureTemplate(o: {
+  name: string; pixelDensity: number; rearrange_uv: boolean; color?: string; power: boolean; padding: boolean;
+  combine_polys: boolean; max_edge_angle: number; max_island_angle: number;
+}): Promise<any> {
+  const texture: any = await new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      const dismissed = dismissTemplateProgress();
+      reject(new Error(
+        `Texture template generation timed out after 30s.${dismissed ? ' Its progress dialog was cancelled, so Blockbench is not left blocked behind a modal.' : ''}` +
+        ` Try a lower pixel_density, or pass "elements" to template fewer elements at a time.${throttlingHint()}`
+      ));
+    }, 30000);
+    try {
+      TextureGenerator.addBitmap({
+        name: o.name,
+        folder: 'block',
+        type: 'template',
+        // String on purpose: 5.1.5's addBitmap guard coerces non-array numbers
+        // to [16,16], but a numeric STRING survives it and generateTemplate
+        // divides it by 16 to get the pixel density multiplier.
+        resolution: String(o.pixelDensity),
+        rearrange_uv: o.rearrange_uv,
+        color: o.color ? (window as any).tinycolor(o.color) : undefined,
+        power: o.power,
+        padding: o.padding,
+        particle: 'auto',
+        compress: false,
+        double_use: false,
+        combine_polys: o.combine_polys,
+        max_edge_angle: o.max_edge_angle,
+        max_island_angle: o.max_island_angle,
+      }, (tex: any) => {
+        clearTimeout(timer);
+        resolve(tex);
+      });
+    } catch (err) {
+      clearTimeout(timer);
+      reject(err);
+    }
+  });
+  await awaitTextureSettle(texture);
+  return texture;
+}
+
 register('generate_texture_template', async (params) => {
   requireProject();
   if (!Texture.all.length || params.new_texture !== false) {
@@ -191,43 +239,17 @@ register('generate_texture_template', async (params) => {
     updateSelection();
   }
   const pixelDensity = clampInt(params.pixel_density ?? 16, 1, 128);
-  const texture: any = await new Promise((resolve, reject) => {
-    const timer = setTimeout(() => {
-      const dismissed = dismissTemplateProgress();
-      reject(new Error(
-        `Texture template generation timed out after 30s.${dismissed ? ' Its progress dialog was cancelled, so Blockbench is not left blocked behind a modal.' : ''}` +
-        ` Try a lower pixel_density, or pass "elements" to template fewer elements at a time.${throttlingHint()}`
-      ));
-    }, 30000);
-    try {
-      TextureGenerator.addBitmap({
-        name: params.name || `${Project.name || 'model'}_texture`,
-        folder: 'block',
-        type: 'template',
-        // String on purpose: 5.1.5's addBitmap guard coerces non-array numbers
-        // to [16,16], but a numeric STRING survives it and generateTemplate
-        // divides it by 16 to get the pixel density multiplier.
-        resolution: String(pixelDensity),
-        rearrange_uv: params.rearrange_uv !== false,
-        color: params.color ? (window as any).tinycolor(params.color) : undefined,
-        power: params.power_of_two !== false,
-        padding: params.padding === true,
-        particle: 'auto',
-        compress: false,
-        double_use: false,
-        combine_polys: false,
-        max_edge_angle: 36,
-        max_island_angle: 45,
-      }, (tex: any) => {
-        clearTimeout(timer);
-        resolve(tex);
-      });
-    } catch (err) {
-      clearTimeout(timer);
-      reject(err);
-    }
+  const texture: any = await runTextureTemplate({
+    name: params.name || `${Project.name || 'model'}_texture`,
+    pixelDensity,
+    rearrange_uv: params.rearrange_uv !== false,
+    color: params.color,
+    power: params.power_of_two !== false,
+    padding: params.padding === true,
+    combine_polys: false,
+    max_edge_angle: 36,
+    max_island_angle: 45,
   });
-  await awaitTextureSettle(texture);
   Canvas.updateAllUVs();
   Canvas.updateAllFaces();
   return { generated: true, texture: describeTexture(texture), note: 'Element UVs were re-arranged onto the new template texture.' };

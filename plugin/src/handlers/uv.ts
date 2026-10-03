@@ -224,13 +224,19 @@ register('inspect_uv', (params) => {
       const own = owners.get(f.tex) || new Map<number, string>();
       owners.set(f.tex, own);
       const bmp = scanPixels ? bitmapOf(f.tex) : null;
+      // Overlap is judged on interior texels only: a centre exactly on an
+      // edge shared with the neighbouring face belongs to both.
+      const inner = faceMask(f, true);
       let clear = 0;
       for (let i = 0; i < m.bits.length; i++) {
         if (!m.bits[i]) continue;
         const x = m.x + (i % m.w), y = m.y + Math.floor(i / m.w);
         const id = y * f.tex.width + x;
+        const ii = (y - inner.y) * inner.w + (x - inner.x);
+        const interior = x >= inner.x && y >= inner.y && x < inner.x + inner.w && y < inner.y + inner.h && inner.bits[ii];
         const prev = own.get(id);
-        if (prev && prev !== label) {
+        if (!interior) { if (!prev) own.set(id, '~' + label); }
+        else if (prev && prev !== label && !prev.startsWith('~')) {
           meshOverlapPx++;
           if (overlapSamples.length < maxSamples && !overlapSamples.some((o) => o.startsWith(label))) overlapSamples.push(`${label} ↔ ${prev}`);
         } else own.set(id, label);

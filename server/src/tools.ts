@@ -690,6 +690,30 @@ export function registerTools(server: McpServer) {
     annotations: readOnly,
   }, forward('inspect_uv'));
 
+  server.registerTool('unwrap_mesh', {
+    title: 'Unwrap meshes into UV islands',
+    description: 'UV-unwrap cubes and meshes onto a NEW packed texture, the way a low-poly character is prepared for hand painting. Unlike generate_texture_template, connected mesh faces are joined into islands (a limb becomes one strip instead of dozens of loose faces), so painting runs continuously across them.\n- seams: cut ("divide") or force-join ("join") specific mesh edges before unwrapping — e.g. cut a sleeve along its inner side. "auto" clears a seam.\n- seam_angle / island_angle: faces only join across edges flatter than seam_angle, and an island stops growing once it bends more than island_angle in total (defaults 36 / 45).\n- density_scale: more or fewer texels for chosen parts, e.g. {"head": 2, "boots": 0.5} — give the face and torso extra detail.\n- keep_paint (default true): texels already painted on the old UVs are copied to the new layout face by face, so you can re-unwrap after modeling changes without losing paint.\nReports texel density (texture px per model unit) min/median/max. Then paint with paint_texture/paint_faces targets or bake_texture.',
+    inputSchema: {
+      elements: z.array(z.string()).optional().describe('Cubes/meshes/groups to unwrap (default: the whole model)'),
+      pixel_density: z.number().optional().describe('Template resolution: 16 = 1 texture px per model unit, 32 = 2 px, 64 = 4 px (default 16). Low-poly painted characters usually want 32-64.'),
+      density_scale: z.record(z.string(), z.number()).optional().describe('Per element/group multiplier on the density, e.g. {"head": 2}'),
+      seams: z.array(z.object({
+        mesh: z.string().describe('Mesh name/uuid'),
+        edges: z.array(z.array(z.string()).length(2)).describe('[[vertexA, vertexB], ...] vertex keys from get_element'),
+        mode: z.enum(['divide', 'join', 'auto']).optional().describe('divide (default) = cut here; join = never cut here; auto = clear'),
+      })).optional(),
+      seam_angle: z.number().optional().describe('Max angle (deg) between faces that may share an island, default 36'),
+      island_angle: z.number().optional().describe('Max total bend (deg) inside one island, default 45'),
+      combine: z.boolean().optional().describe('Join connected mesh faces into islands (default true)'),
+      keep_paint: z.boolean().optional().describe('Copy existing paint to the new layout (default true)'),
+      padding: z.boolean().optional().describe('1px gap between islands (default true — stops colors bleeding at seams)'),
+      power_of_two: z.boolean().optional().describe('Round the texture size up to a power of two (default true)'),
+      color: z.string().optional().describe('Template background color'),
+      name: z.string().optional().describe('New texture name'),
+    },
+    annotations: mutating,
+  }, forward('unwrap_mesh'));
+
   // ───────────────────────────── animation ─────────────────────────────
 
   server.registerTool('create_animation', {
