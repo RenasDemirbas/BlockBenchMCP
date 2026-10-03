@@ -234,6 +234,48 @@ export function registerTools(server: McpServer) {
     annotations: mutating,
   }, forward('add_mesh_primitive'));
 
+  const meshSelect = () => z.union([
+    z.literal('all'), z.literal('previous'),
+    z.object({
+      faces: z.union([z.array(z.string()), z.literal('all')]).optional().describe('Face keys (get_element) or direction names'),
+      facing: z.union([z.enum(['up', 'down', 'north', 'south', 'east', 'west']), vec3(), z.array(z.enum(['up', 'down', 'north', 'south', 'east', 'west']))]).optional().describe('Faces whose world normal points this way'),
+      within: z.number().optional().describe('Angle tolerance for "facing", default 30°'),
+      vertices: z.array(z.string()).optional(),
+      edges: z.array(z.array(z.string()).length(2)).optional().describe('[[vA, vB], ...]'),
+      where: z.object({
+        axis: z.enum(['x', 'y', 'z']).optional(), min: z.number().optional(), max: z.number().optional(),
+        space: z.enum(['local', 'world']).optional(),
+      }).optional().describe('Vertices inside a slab (and faces fully inside it), e.g. {axis:"y", min: 10} = the top part'),
+    }),
+  ]);
+
+  server.registerTool('edit_mesh', {
+    title: 'Edit mesh topology (extrude, inset, loop cut, bevel...)',
+    description: 'Box-modeling operations on a mesh, run as ordered "steps" (each its own undo step). Each step selects part of the mesh ("select"), then applies "op". select "previous" = what the last step produced (the new faces of an extrude, the inner face of an inset...), so chains like extrude → inset → extrude work in ONE call.\nOps (Blockbench\'s own tools): extrude {distance, direction: outwards|average|x+|x-|y+|y-|z+|z-, even}; inset {amount 0-100, % toward the face centre}; solidify {thickness} (give a flat cape/brim thickness); loop_cut {cuts 1-16, position 0-1, direction: which edge pair of the selected face to cut across (0/1)}; merge_vertices {distance? (by distance), center?}; dissolve_edges (select edges); create_face (select 3-4 vertices); invert_faces; split (selected faces become a new mesh).\nOps implemented here: subdivide {levels 1-3, smooth 0-1} (each quad → 4); bevel {amount, angle} chamfers every edge sharper than angle (default 30°) on a CLOSED mesh — rounds off boxy guns, boots, belts; delete {what: faces|vertices}; merge_meshes {meshes: [...]} merges others into this mesh.\nReturns per-step counts and the resulting selection. Run unwrap_mesh after the shape is final.',
+    inputSchema: {
+      mesh: z.string().describe('Mesh name/uuid'),
+      steps: z.array(z.object({
+        op: z.enum(['extrude', 'inset', 'solidify', 'loop_cut', 'merge_vertices', 'dissolve_edges', 'create_face', 'invert_faces', 'split', 'subdivide', 'bevel', 'delete', 'merge_meshes']),
+        select: meshSelect().optional().describe('Default "all"'),
+        distance: z.number().optional().describe('extrude: length in units; merge_vertices: merge radius'),
+        direction: z.union([z.string(), z.number()]).optional().describe('extrude: outwards|average|x+|x-|y+|y-|z+|z-; loop_cut: 0 or 1'),
+        even: z.boolean().optional().describe('extrude: keep thickness even on angled faces'),
+        amount: z.number().optional().describe('inset: 0-100 (default 50); bevel: chamfer width in units (default 0.5)'),
+        thickness: z.number().optional().describe('solidify'),
+        cuts: z.number().optional().describe('loop_cut: number of cuts'),
+        position: z.number().optional().describe('loop_cut: 0-1 along the face (default 0.5)'),
+        spacing: z.enum(['proportional', 'even_start', 'even_end']).optional(),
+        center: z.boolean().optional().describe('merge_vertices: merge into the centre'),
+        levels: z.number().optional().describe('subdivide: 1-3'),
+        smooth: z.number().optional().describe('subdivide: 0-1 relaxation toward neighbours (rounder)'),
+        angle: z.number().optional().describe('bevel: only edges sharper than this (deg)'),
+        what: z.enum(['faces', 'vertices']).optional().describe('delete'),
+        meshes: z.array(z.string()).optional().describe('merge_meshes'),
+      })).min(1),
+    },
+    annotations: mutating,
+  }, forward('edit_mesh'));
+
   server.registerTool('add_planes', {
     title: 'Add planes (fur/foliage cards)',
     description: 'Create flat planes — zero-thickness cubes with only their two large faces active. Works in EVERY format (bedrock included; vanilla uses the same trick for grass/fur). THE fur workflow for fluffy models: 1) model the body normally, 2) add fur planes along silhouette edges (back, tail, cheeks, chest) — single "planes" for tufts/ears/whiskers, "strips" for rows of overlapping tufts along a line, tilted outward 10-35°, 3) give them UV space on an alpha texture and cut jagged silhouettes with paint_texture op "jagged_edge" (mode "erase"). "at" is the center of the BASE edge and the default pivot, so rotation/tilt swings the card around its attachment line.',

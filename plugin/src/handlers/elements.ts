@@ -237,11 +237,11 @@ register('add_mesh_primitive', (params) => {
 
   if (shape === 'plane') {
     const a = V(-r, 0, -r), b = V(r, 0, -r), c = V(r, 0, r), d = V(-r, 0, r);
-    faces.push({ vertices: [a, b, c, d] });
+    faces.push({ vertices: [a, d, c, b] }); // faces up
   } else if (shape === 'pyramid') {
     const a = V(-r, 0, -r), b = V(r, 0, -r), c = V(r, 0, r), d = V(-r, 0, r), top = V(0, height, 0);
-    faces.push({ vertices: [d, c, b, a] });
-    faces.push({ vertices: [a, b, top] }, { vertices: [b, c, top] }, { vertices: [c, d, top] }, { vertices: [d, a, top] });
+    faces.push({ vertices: [a, b, c, d] });
+    faces.push({ vertices: [top, b, a] }, { vertices: [top, c, b] }, { vertices: [top, d, c] }, { vertices: [top, a, d] });
   } else if (shape === 'cylinder' || shape === 'cone') {
     const topR = shape === 'cone' ? 0 : r;
     const bottom: string[] = [], top: string[] = [];
@@ -253,17 +253,18 @@ register('add_mesh_primitive', (params) => {
     const apex = shape === 'cone' ? V(0, height, 0) : null;
     for (let i = 0; i < sides; i++) {
       const j = (i + 1) % sides;
-      if (shape === 'cylinder') faces.push({ vertices: [bottom[i], bottom[j], top[j], top[i]] });
-      else faces.push({ vertices: [bottom[i], bottom[j], apex!] });
+      // Counter-clockwise seen from outside, so normals point outward.
+      if (shape === 'cylinder') faces.push({ vertices: [bottom[i], top[i], top[j], bottom[j]] });
+      else faces.push({ vertices: [bottom[i], apex!, bottom[j]] });
     }
     // Caps: Blockbench faces hold 3-4 vertices, so an n-gon cap becomes a
     // triangle fan around a centre vertex (a quad when there are 4 sides).
     const cap = (ring: string[], y: number, down: boolean) => {
-      if (ring.length <= 4) { faces.push({ vertices: down ? [...ring].reverse() : ring }); return; }
+      if (ring.length <= 4) { faces.push({ vertices: down ? ring : [...ring].reverse() }); return; }
       const c = V(0, y, 0);
       for (let i = 0; i < ring.length; i++) {
         const a = ring[i], b = ring[(i + 1) % ring.length];
-        faces.push({ vertices: down ? [b, a, c] : [a, b, c] });
+        faces.push({ vertices: down ? [a, b, c] : [b, a, c] });
       }
     };
     cap(bottom, 0, true);
@@ -311,7 +312,7 @@ register('add_mesh_primitive', (params) => {
       const i2 = (i + 1) % sides;
       for (let j = 0; j < minorSides; j++) {
         const j2 = (j + 1) % minorSides;
-        faces.push({ vertices: [grid[i][j], grid[i2][j], grid[i2][j2], grid[i][j2]] });
+        faces.push({ vertices: [grid[i][j], grid[i][j2], grid[i2][j2], grid[i2][j]] });
       }
     }
   } else if (HEDRONS.includes(shape)) {

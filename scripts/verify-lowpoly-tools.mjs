@@ -68,6 +68,20 @@ try {
   const scratch = await tool('create_project', { format: 'free', name: 'mcp_lowpoly_probe' });
   check('scratch project created', !scratch.isError, scratch.text.slice(0, 80));
 
+  // ── 0. primitive winding: every face normal points away from the centre ──
+  if (want('orient')) {
+    for (const shape of ['pyramid', 'cylinder', 'cone', 'sphere', 'torus', 'icosphere', 'octahedron', 'dodecahedron']) {
+      await tool('add_mesh_primitive', { shape, sides: 8, name: `o_${shape}`, position: [0, 0, 100] });
+      const r = await bb(`(() => { const m = Mesh.all.find(m => m.name === 'o_${shape}'); const vs = Object.values(m.vertices);
+        const c = [0,1,2].map(j => vs.reduce((s,v)=>s+v[j],0)/vs.length); let inward = 0, n = 0;
+        for (const k in m.faces) { const f = m.faces[k]; const nn = f.getNormal(true); const fc = [0,1,2].map(j => f.vertices.reduce((s,v)=>s+m.vertices[v][j],0)/f.vertices.length);
+          const d = fc.map((x,j)=>x-c[j]); if (Math.hypot(...d) < 1e-6) continue;
+          ${shape === 'torus' ? `const ring = [fc[0], 0, fc[2]]; const l = Math.hypot(ring[0], ring[2]) || 1; const rc = [ring[0]/l*8, c[1], ring[2]/l*8]; for (let j = 0; j < 3; j++) d[j] = fc[j] - rc[j];` : ''}
+          n++; if (nn[0]*d[0]+nn[1]*d[1]+nn[2]*d[2] < 0) inward++; } m.remove(); return [inward, n]; })()`);
+      check(`${shape}: normals point outward`, Array.isArray(r) && r[0] === 0, JSON.stringify(r));
+    }
+  }
+
   // ── 1. mesh painting ──────────────────────────────────────────────────────
   if (want('paint')) {
     const prim = await tool('add_mesh_primitive', { shape: 'cylinder', sides: 6, diameter: 8, height: 16, name: 'barrel' });
@@ -131,6 +145,33 @@ try {
     check('red top survives the unwrap', Array.isArray(red) && red[0] > 200 && red[1] < 40, JSON.stringify(red));
     const islands = await bb(`(() => { const m = Mesh.all.find(m => m.name === 'arm'); const seen = new Set(); let n = 0; for (const k in m.faces) { if (seen.has(k)) continue; n++; const isl = m.faces[k].getUVIsland(); isl.forEach(x => seen.add(x)); } return [n, Object.keys(m.faces).length]; })()`);
     check('arm faces were joined into a few islands', Array.isArray(islands) && islands[0] < islands[1] / 2, JSON.stringify(islands));
+  }
+
+  // ── 3. edit_mesh ──────────────────────────────────────────────────────────
+  if (want('edit')) {
+    const maxY = (name) => bb(`Math.max(...Object.values(Mesh.all.find(m => m.name === '${name}').vertices).map(v => v[1]))`);
+    await tool('add_mesh_primitive', { shape: 'cylinder', sides: 4, diameter: 8, height: 8, name: 'torso', position: [-20, 0, 0] });
+    const chain = await tool('edit_mesh', { mesh: 'torso', steps: [
+      { op: 'extrude', select: { facing: 'up' }, distance: 4 },
+      { op: 'inset', select: 'previous', amount: 30 },
+      { op: 'extrude', select: 'previous', distance: 2 },
+    ] });
+    check('extrude → inset → extrude chain', !chain.isError && chain.json?.steps?.length === 3, chain.text.slice(0, 400));
+    const top = await maxY('torso');
+    check('chain raised the top by 6 units', Math.abs(top - 14) < 0.01, `maxY=${top}`);
+    const lc = await tool('edit_mesh', { mesh: 'torso', steps: [{ op: 'loop_cut', select: { facing: 'north', within: 60 }, cuts: 2 }] });
+    check('loop_cut adds faces', !lc.isError && lc.json?.steps?.[0]?.new_faces > 0, lc.text.slice(0, 300));
+
+    await tool('add_mesh_primitive', { shape: 'cylinder', sides: 4, diameter: 8, height: 6, name: 'gunbody', position: [-40, 0, 0] });
+    const bev = await tool('edit_mesh', { mesh: 'gunbody', steps: [{ op: 'bevel', amount: 0.75 }] });
+    check('bevel a box → 26 faces', !bev.isError && bev.json?.faces === 26, `faces=${bev.json?.faces} ${bev.isError ? bev.text.slice(0, 200) : ''}`);
+    const sub = await tool('edit_mesh', { mesh: 'gunbody', steps: [{ op: 'subdivide', select: { facing: 'up' }, levels: 1 }] });
+    check('subdivide splits the top', !sub.isError && sub.json?.faces > 26, `faces=${sub.json?.faces} ${sub.isError ? sub.text.slice(0, 200) : ''}`);
+    const del = await tool('edit_mesh', { mesh: 'gunbody', steps: [{ op: 'delete', select: { facing: 'down' } }] });
+    check('delete bottom faces', !del.isError && del.json?.faces < sub.json?.faces, `faces=${del.json?.faces}`);
+    const sol = await tool('add_mesh_primitive', { shape: 'plane', diameter: 10, name: 'cape', position: [-60, 0, 0] });
+    const so = await tool('edit_mesh', { mesh: 'cape', steps: [{ op: 'solidify', thickness: 1 }] });
+    check('solidify a plane', !sol.isError && !so.isError && so.json?.faces >= 6, so.text.slice(0, 200));
   }
 } catch (err) {
   check('no exception', false, err.stack || err.message);
