@@ -233,6 +233,24 @@ try {
     check('re-bake reads flat colours (no compounding error)', !rebake.isError, rebake.text.slice(0, 120));
     await tool('capture_screenshot', { preset: 'isometric_right' }).then(() => {}).catch(() => {});
   }
+
+  // ── 6. palette ────────────────────────────────────────────────────────────
+  if (want('palette')) {
+    const r = await tool('palette', { action: 'ramp', colors: ['#7a3a32', '#3c4f8a'], shadows: 2, highlights: 2 });
+    check('ramp builds 5 colours per base', !r.isError && r.json?.ramps?.[0]?.colors?.length === 5, r.text.slice(0, 200));
+    const dark = r.json?.ramps?.[0]?.colors?.[0];
+    check('shadow end is darker and cooler than the base', typeof dark === 'string' && parseInt(dark.slice(1, 3), 16) < 0x7a, dark);
+    await tool('add_cubes', { cubes: [{ name: 'qbox', from: [100, 0, 0], to: [108, 8, 8] }] });
+    await tool('unwrap_mesh', { elements: ['qbox'], pixel_density: 64, name: 'q_tex', keep_paint: false });
+    await tool('paint_faces', { targets: [{ element: 'qbox', color: '#8a6a40' }] });
+    await tool('paint_texture', { ops: [{ type: 'gradient', target: { element: 'qbox', faces: 'all' }, stops: [{ at: 0, color: '#ffeeaa' }, { at: 1, color: '#201030' }] }] });
+    const ex = await tool('palette', { action: 'extract', texture: 'q_tex' });
+    check('extract counts many gradient colours', !ex.isError && ex.json?.unique_colors > 12, `unique=${ex.json?.unique_colors}`);
+    const q = await tool('palette', { action: 'quantize', texture: 'q_tex', palette: 'auto', max_colors: 6 });
+    check('quantize auto → ≤ 6 colours', !q.isError && q.json?.colors_after <= 6, q.text.slice(0, 200));
+    const q2 = await tool('palette', { action: 'quantize', texture: 'q_tex', palette: 'pico8', dither: 'bayer4' });
+    check('quantize to pico8 with dither', !q2.isError && q2.json?.colors_after <= 16, `after=${q2.json?.colors_after}`);
+  }
 } catch (err) {
   check('no exception', false, err.stack || err.message);
 } finally {
