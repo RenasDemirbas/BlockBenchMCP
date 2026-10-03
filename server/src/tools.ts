@@ -276,6 +276,55 @@ export function registerTools(server: McpServer) {
     annotations: mutating,
   }, forward('edit_mesh'));
 
+  server.registerTool('add_loft', {
+    title: 'Add loft (limb/tube from cross-sections)',
+    description: 'Build a mesh by sweeping a cross-section through a list of rings — the fastest way to make low-poly LIMBS (upper arm → elbow → forearm → wrist), legs, baggy trousers, a torso, a neck, fingers, gun barrels, a hat crown. Each ring has a centre "at" (model units, relative to "position"), a "size" [width, depth] and an optional "twist" (deg) and "offset". Rings may bend the path freely; the profile follows it without spinning. A ring with size 0 becomes a pointed tip. profile: "box" (4 sides, the classic low-poly limb), "round" (sides 3-32) or custom [[x,y],...] points in -0.5..0.5. Normals face outward; caps close the ends. Follow with transform_mesh/edit_mesh for shaping and unwrap_mesh before painting. "free" format only.',
+    inputSchema: {
+      name: z.string().optional(),
+      rings: z.array(z.object({
+        at: vec3().describe('Ring centre'),
+        size: z.union([z.number(), vec2()]).optional().describe('[width, depth] (or one number), default 2'),
+        twist: z.number().optional().describe('Rotate this ring\'s profile (deg)'),
+        offset: vec2().optional().describe('Shift the ring sideways in its own plane'),
+      })).min(2),
+      profile: z.union([z.enum(['box', 'round']), z.array(vec2())]).optional().describe('Default "box"'),
+      sides: z.number().optional().describe('round profile: number of sides (default 8)'),
+      caps: z.enum(['both', 'start', 'end', 'none']).optional().describe('Close the ends (default both)'),
+      side: vec3().optional().describe('Which world direction the profile\'s width axis should face at the first ring (default +X, or +Z for X-pointing limbs)'),
+      parent: z.string().optional(),
+      position: vec3().optional().describe('Mesh origin / pivot'),
+      rotation: vec3().optional(),
+      texture: z.string().optional(),
+    },
+    annotations: mutating,
+  }, forward('add_loft'));
+
+  server.registerTool('transform_mesh', {
+    title: 'Deform mesh vertices (taper, bend, twist...)',
+    description: 'Shape a mesh (or part of it via "select", same spec as edit_mesh) with ordered deformers, in the mesh\'s local coordinates:\n- taper {axis, factor, start?, from?: "min"|"max"}: cross-section scales from start (1) to factor along the axis — trouser legs flaring out, a tapering finger. factor may be [a, b] per remaining axis.\n- bend {axis, angle, toward: "z"|"-z"|"x"...}: curl the part along axis toward a direction — elbows, a drooping hat brim, a curved cape.\n- twist {axis, angle}\n- scale {factor, pivot?}, rotate {angles: [x,y,z], pivot?}, move {offset}\n- smooth {factor 0-1, iterations}: relax toward neighbours (rounder, softer)\n- jitter {amount, seed}: seeded hand-made wobble that breaks the perfect primitive look.\nPivot defaults to the selection\'s bounding-box centre; ranges use the selection\'s extent.',
+    inputSchema: {
+      mesh: z.string().optional().describe('Mesh name/uuid'),
+      meshes: z.array(z.string()).optional().describe('Several meshes, each deformed independently'),
+      select: meshSelect().optional().describe('Default: the whole mesh'),
+      ops: z.array(z.object({
+        type: z.enum(['taper', 'bend', 'twist', 'scale', 'rotate', 'move', 'smooth', 'jitter']),
+        axis: z.enum(['x', 'y', 'z']).optional().describe('taper/bend/twist: along which axis (default y)'),
+        factor: z.union([z.number(), vec2(), vec3()]).optional().describe('taper: end scale (number or [a,b]); scale: number or [x,y,z]; smooth: 0-1'),
+        start: z.union([z.number(), vec2()]).optional().describe('taper: scale at the start, default 1'),
+        from: z.enum(['min', 'max']).optional().describe('taper/bend/twist: which end is the start (default min)'),
+        angle: z.number().optional().describe('bend/twist: degrees'),
+        toward: z.string().optional().describe('bend: x, y, z or -x, -y, -z'),
+        angles: vec3().optional().describe('rotate: degrees'),
+        offset: vec3().optional().describe('move'),
+        pivot: vec3().optional(),
+        iterations: z.number().optional().describe('smooth'),
+        amount: z.number().optional().describe('jitter: max displacement in units'),
+        seed: z.number().optional(),
+      })).min(1),
+    },
+    annotations: mutating,
+  }, forward('transform_mesh'));
+
   server.registerTool('add_planes', {
     title: 'Add planes (fur/foliage cards)',
     description: 'Create flat planes — zero-thickness cubes with only their two large faces active. Works in EVERY format (bedrock included; vanilla uses the same trick for grass/fur). THE fur workflow for fluffy models: 1) model the body normally, 2) add fur planes along silhouette edges (back, tail, cheeks, chest) — single "planes" for tufts/ears/whiskers, "strips" for rows of overlapping tufts along a line, tilted outward 10-35°, 3) give them UV space on an alpha texture and cut jagged silhouettes with paint_texture op "jagged_edge" (mode "erase"). "at" is the center of the BASE edge and the default pivot, so rotation/tilt swings the card around its attachment line.',

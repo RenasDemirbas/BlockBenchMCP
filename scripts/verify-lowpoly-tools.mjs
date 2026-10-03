@@ -173,6 +173,36 @@ try {
     const so = await tool('edit_mesh', { mesh: 'cape', steps: [{ op: 'solidify', thickness: 1 }] });
     check('solidify a plane', !sol.isError && !so.isError && so.json?.faces >= 6, so.text.slice(0, 200));
   }
+
+  // ── 4. add_loft + transform_mesh ──────────────────────────────────────────
+  if (want('loft')) {
+    const volume = (name) => bb(`(() => { const m = Mesh.all.find(m => m.name === '${name}'); let v = 0;
+      for (const k in m.faces) { const vs = m.faces[k].getSortedVertices().map(x => m.vertices[x]);
+        for (let i = 1; i + 1 < vs.length; i++) { const [a, b, c] = [vs[0], vs[i], vs[i+1]];
+          v += (a[0]*(b[1]*c[2]-b[2]*c[1]) - a[1]*(b[0]*c[2]-b[2]*c[0]) + a[2]*(b[0]*c[1]-b[1]*c[0])) / 6; } } return v; })()`);
+    const arm = await tool('add_loft', { name: 'arm_l', position: [0, 0, 40], rings: [
+      { at: [0, 24, 0], size: [4, 4] }, { at: [0, 16, 1], size: [3.5, 3.5] }, { at: [0, 8, 3], size: [3, 3], twist: 15 }, { at: [0, 4, 3], size: 0 },
+    ] });
+    check('box loft with a bent path and a pointed tip', !arm.isError && arm.json?.created?.[0]?.faces === 13, arm.text.slice(0, 200));
+    const v1 = await volume('arm_l');
+    check('loft is closed with outward normals (positive volume)', v1 > 50, `volume=${v1}`);
+    const tube = await tool('add_loft', { name: 'barrel_r', profile: 'round', sides: 8, position: [10, 0, 40], rings: [{ at: [0, 0, 0], size: 2 }, { at: [0, 0, -12], size: 2 }] });
+    check('round loft along -Z', !tube.isError && tube.json?.created?.[0]?.faces === 8 + 16, tube.text.slice(0, 200));
+    const v2 = await volume('barrel_r');
+    check('round loft volume ≈ π·r²·h', v2 > 30 && v2 < 40, `volume=${v2}`);
+
+    await tool('add_loft', { name: 'leg', position: [20, 0, 40], rings: [{ at: [0, 0, 0], size: 4 }, { at: [0, 8, 0], size: 4 }, { at: [0, 16, 0], size: 4 }] });
+    const tp = await tool('transform_mesh', { mesh: 'leg', ops: [{ type: 'taper', axis: 'y', factor: 2 }] });
+    const width = await bb(`(() => { const m = Mesh.all.find(m => m.name === 'leg'); const top = Object.values(m.vertices).filter(v => v[1] > 15.9); return Math.max(...top.map(v => v[0])) - Math.min(...top.map(v => v[0])); })()`);
+    check('taper doubles the top width', !tp.isError && Math.abs(width - 8) < 0.01, `width=${width}`);
+    const bend = await tool('transform_mesh', { mesh: 'leg', select: { where: { axis: 'y', min: 7.9 } }, ops: [{ type: 'bend', axis: 'y', angle: 90, toward: 'z' }] });
+    const tipZ = await bb(`(() => { const m = Mesh.all.find(m => m.name === 'leg'); const vs = Object.values(m.vertices); const top = vs.filter(v => v[2] > 4); return [top.length, Math.max(...vs.map(v => v[2]))]; })()`);
+    check('bend curls the upper half toward +Z', !bend.isError && Array.isArray(tipZ) && tipZ[1] > 5, JSON.stringify(tipZ) + bend.text.slice(0, 120));
+    const v3 = await volume('leg');
+    check('deformed loft still has positive volume', v3 > 0, `volume=${v3}`);
+    const jit = await tool('transform_mesh', { mesh: 'leg', ops: [{ type: 'jitter', amount: 0.3, seed: 3 }, { type: 'smooth', factor: 0.3 }] });
+    check('jitter + smooth run', !jit.isError, jit.text.slice(0, 120));
+  }
 } catch (err) {
   check('no exception', false, err.stack || err.message);
 } finally {
