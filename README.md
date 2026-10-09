@@ -11,11 +11,11 @@ Every change goes into Blockbench's undo history. Press `Ctrl+Z` to revert any s
 
 | | |
 |---|---|
-| **Version** | 1.6.1 · [Changelog](CHANGELOG.md) |
+| **Version** | 1.7.0 · [Changelog](CHANGELOG.md) |
 | **Blockbench** | 5.2 or later recommended. 5.1.4 also works, but 5.2-only tools return a "requires 5.2" error there. |
 | **Client** | Claude Desktop and Claude Code. Developed on Windows. |
 | **Node.js** | 18 or later |
-| **Tools** | 82 |
+| **Tools** | 69 |
 
 > **If you use version 1.6.0 or older, update.** In older versions, while Blockbench and the MCP server
 > were running, any website open in your browser could connect to the bridge and run code on your
@@ -28,7 +28,7 @@ Every change goes into Blockbench's undo history. Press `Ctrl+Z` to revert any s
 | Modeling | Cubes, meshes, planes, locators, bounding boxes. Groups act as bones in animations. `mirror` and `mirror_elements` for symmetric parts. Mesh primitives: plane, pyramid, cylinder, cone, sphere, torus, icosphere, octahedron, dodecahedron. |
 | Low-poly | Limbs and tubes from cross-sections (`add_loft`). Extrude, inset, loop cut, bevel, solidify, subdivide (`edit_mesh`). Taper, bend, twist, smooth (`transform_mesh`). |
 | Texturing | Template generation, layers and layer groups, gradients, noise, fur strands (`strands`), jagged edges (`jagged_edge`), painting on cube and mesh faces. Light, AO and edge baking (`bake_texture`). Hue-shifted color ramps and palette locking (`palette`). |
-| UV | Mesh unwrapping with islands, seams and per-part density (`unwrap_mesh`). Cube UV, auto UV, UV diagnostics (`inspect_uv`). |
+| UV | Mesh unwrapping with islands, seams and per-part density (`unwrap_mesh`). Cube UV, auto UV, UV diagnostics (`uv` action `inspect`). |
 | Animation | Keyframes (with Molang expressions), mirrored keyframes, 20 motion presets, effect keyframes, IK with poles, baking IK into plain keyframes. |
 | Checking | Screenshots, multi-view captures, animation previews, intersection and ground-contact checks during animation, build timelapse GIF (`record_build`). |
 | Reference | Silhouette comparison against a reference image (`compare_reference`), projecting a reference onto the texture (`project_reference`), reference models and 3D reference images in the scene. |
@@ -133,7 +133,7 @@ screenshot after each step and asking for fixes is less work than fixing everyth
 5. **Animation.** `create_animation`, `set_keyframes`, and `mirror_keyframes` for left-right pairs.
    Then use `validate_model` to check for parts intersecting during the animation, and
    `query_geometry` to check that the feet touch the ground.
-6. **Export.** `export_model` and `export_animations`. For 2D games, `export_pixel_sprites`.
+6. **Export.** `project_file` actions `export` and `export_animations`. For 2D games, `pixel_art` action `export_sheet`.
 
 Example request:
 
@@ -182,18 +182,17 @@ OUT=C:/output/folder node scripts/examples/build-gunslinger.mjs
 
 | Area | Tools |
 |---|---|
-| Project | `get_status`, `list_formats`, `create_project`, `get_project_info`, `set_project_settings`, `open_project`, `save_project`, `select_project_tab`, `close_project` |
+| Project | `get_status`, `list_formats`, `create_project`, `get_project_info`, `set_project_settings`, `project_file` (open, save, export, export_animations, import, get_json, switch_tab, close) |
 | Geometry | `add_groups`, `add_cubes`, `add_meshes`, `add_mesh_primitive`, `add_loft`, `edit_mesh`, `transform_mesh`, `add_planes`, `add_locators`, `add_bounding_boxes`, `list_outline`, `get_element`, `update_elements`, `delete_elements`, `duplicate_elements`, `mirror_elements`, `select_elements` |
 | Texture | `create_texture`, `generate_texture_template`, `list_textures`, `get_texture`, `import_texture`, `apply_texture`, `paint_texture`, `paint_faces`, `bake_texture`, `palette`, `texture_layers`, `resize_texture`, `set_texture_resolution`, `delete_texture` |
-| UV | `unwrap_mesh`, `set_cube_uv`, `set_mesh_uv`, `auto_uv`, `inspect_uv` |
+| UV | `unwrap_mesh`, `uv` (inspect, set_cube, set_mesh, auto) |
 | Animation | `create_animation`, `list_animations`, `get_animation`, `update_animation`, `delete_animation`, `set_keyframes`, `edit_keyframes`, `mirror_keyframes`, `add_effect_keyframes`, `apply_animation_preset`, `variable_placeholders`, `preview_animation`, `render_animation` |
 | IK | `add_ik_controllers`, `bake_ik_animation` |
 | Checking | `validate_model`, `query_geometry`, `capture_screenshot`, `capture_multi_view`, `record_build` |
 | Reference | `compare_reference`, `project_reference` |
 | Scene | `preview_models`, `reference_images` |
-| Pixel art | `render_pixel_art`, `export_pixel_sprites`, `pixel_art_presets` |
-| Display | `set_display_transforms`, `get_display_transforms` |
-| Files | `export_model`, `export_animations`, `import_model`, `get_model_json` |
+| Pixel art | `pixel_art` (render, export_sheet, presets) |
+| Display | `display_transforms` (get, set) |
 | Other | `run_action`, `eval_code`, `undo`, `redo` |
 
 Each tool's parameters are described in its MCP schema. Claude reads them on its own.
@@ -209,7 +208,7 @@ Each tool's parameters are described in its MCP schema. Claude reads them on its
 - Painting shadows on a separate layer (`layer`) set to `multiply` at 50% opacity makes them easy to
   adjust later.
 - Use `jagged_edge` for fur silhouettes and `strands` for fur texture.
-- If the texture looks right as an image but wrong on the model, run `inspect_uv` first. To see a
+- If the texture looks right as an image but wrong on the model, run `uv` action `inspect` first. To see a
   single face up close, `get_texture` crops and enlarges that face's UV region.
 - If the model looks washed out or shows a grid, the cause is usually not the texture. Check
   Blockbench's `brightness` and `pixel_grid` settings.
@@ -226,7 +225,7 @@ Each tool's parameters are described in its MCP schema. Claude reads them on its
 
 ### Pixel art
 
-`render_pixel_art` doesn't produce a downscaled screenshot; it draws the model by pixel art rules.
+`pixel_art` action `render` doesn't produce a downscaled screenshot; it draws the model by pixel art rules.
 Scale snaps to texture pixels, there is no anti-aliasing, shading uses a limited number of color
 bands, and a 1 px outline is drawn around the silhouette and where parts meet.
 
@@ -237,10 +236,10 @@ bands, and a 1 px outline is drawn around the silhouette and where parts meet.
 - **Style:** `outlined` (default), `clean`, `minecraft`, `flat`.
 - **Palette:** the model's own colors by default. Fixed palettes like `pico8`, `sweetie16`,
   `endesga32`, `db32`, or your own hex list also work. Optional Bayer dithering.
-- **Sprite sheet:** `export_pixel_sprites` writes animations as a single PNG plus an Aseprite-compatible
+- **Sprite sheet:** `pixel_art` action `export_sheet` writes animations as a single PNG plus an Aseprite-compatible
   JSON. Scale and pivot are computed once for all frames, so frames don't drift.
 
-Ask Claude for the `pixel_art_presets` output to see every option.
+Ask Claude for the `pixel_art` action `presets` output to see every option.
 
 ### File paths
 
@@ -299,7 +298,7 @@ An open Claude session fixes its tool list when the server starts. To try a new 
 restarting the session:
 
 ```bash
-node scripts/call-tool.mjs render_pixel_art '{"view":"isometric","size":64}' --images e2e-output/tmp
+node scripts/call-tool.mjs pixel_art '{"action":"render","view":"isometric","size":64}' --images e2e-output/tmp
 ```
 
 ### Tests

@@ -177,7 +177,7 @@ try {
   }
 
   if (STAGE === 'all') {
-    await T('save_project', { path: `${OUT}/gunslinger.bbmodel` });
+    await T('project_file', { action: 'save', path: `${OUT}/gunslinger.bbmodel` });
     const stop = await T('record_build', { action: 'stop', path: `${OUT}/gunslinger_build.gif`, fps: 5, hold_last: 3 });
     console.log(stop.json?.frames, 'frames');
   }

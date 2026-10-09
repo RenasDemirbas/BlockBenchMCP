@@ -91,7 +91,7 @@ try {
   check('template generated', !tpl.isError, `${tpl.json?.texture?.width}x${tpl.json?.texture?.height}`);
 
   // ── 1. inspect_uv on a freshly templated model: no shared rects ─────────────
-  const insp1 = await tool('inspect_uv', {});
+  const insp1 = await tool('uv', { action: 'inspect' });
   check('inspect_uv runs', !insp1.isError, insp1.text.slice(0, 120));
   check('inspect_uv sees 18 faces', insp1.json?.faces === 18, `faces=${insp1.json?.faces}`);
   check('inspect_uv reports no shared UV rects after templating', insp1.json?.shared_uv_rects === undefined, JSON.stringify(insp1.json?.shared_uv_rects));
@@ -201,8 +201,8 @@ try {
   failed = true;
 } finally {
   try {
-    if (scratchOpen) await tool('close_project', { force: true });
-    if (originalTab) await tool('select_project_tab', { uuid: originalTab });
+    if (scratchOpen) await tool('project_file', { action: 'close', force: true });
+    if (originalTab) await tool('project_file', { action: 'switch_tab', uuid: originalTab });
   } catch (err) {
     console.error('cleanup failed:', err.message);
   }

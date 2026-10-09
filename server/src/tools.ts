@@ -47,12 +47,61 @@ const shadeDirections = ['', 'north', 'south', 'east', 'west', 'up', 'down'] as 
 const layerBlendModes = ['default', 'set_opacity', 'color', 'multiply', 'add', 'darken', 'lighten', 'screen', 'overlay', 'difference', 'alpha_mask'] as const;
 const layerParam = () => z.string().optional().describe('Paint into this texture LAYER (name/uuid) instead of the flattened texture. Missing layers are created on top at full texture size, and layers are enabled on the texture if needed — keep shading, details or decals on their own layer, then tune them with texture_layers (opacity, blend mode, visibility).');
 
+interface GroupAction {
+  description: string;
+  command: string;
+  inputSchema?: z.ZodRawShape;
+  /** Accepted like inputSchema but not listed per action — the group description explains them once. */
+  sharedParams?: z.ZodRawShape;
+  timeoutMs?: number;
+  handler?: (params: any) => Promise<ToolResult>;
+}
+
+/**
+ * One tool with an "action" argument for several rarely used commands. A client
+ * that loads every schema up front (Claude Desktop) then pays for one schema, and
+ * params shared by the actions (pixel-art style options) are listed only once.
+ */
+function registerGroup(server: McpServer, name: string, opts: {
+  title: string;
+  description: string;
+  annotations: typeof readOnly | typeof mutating | typeof destructive;
+  actions: Record<string, GroupAction>;
+}) {
+  const shape: z.ZodRawShape = {};
+  const lines: string[] = [];
+  for (const [action, a] of Object.entries(opts.actions)) {
+    const params = Object.entries(a.inputSchema ?? {}).map(([key, schema]) => {
+      shape[key] ??= schema.isOptional() ? schema : schema.optional();
+      return schema.isOptional() ? key : `${key}*`;
+    });
+    for (const [key, schema] of Object.entries(a.sharedParams ?? {})) shape[key] ??= schema.isOptional() ? schema : schema.optional();
+    if (a.sharedParams) params.push('+ shared params');
+    lines.push(`- "${action}": ${a.description}${params.length ? ` Params: ${params.join(', ')}.` : ''}`);
+  }
+  server.registerTool(name, {
+    title: opts.title,
+    description: `${opts.description} Actions (* = required):\n${lines.join('\n')}`,
+    inputSchema: { action: z.enum(Object.keys(opts.actions) as [string, ...string[]]), ...shape },
+    annotations: opts.annotations,
+  }, async ({ action, ...params }: any) => {
+    const a = opts.actions[action];
+    // The merged schema makes every param optional; check this action's own schema (and reject other actions' params).
+    const parsed = z.object({ ...a.inputSchema, ...a.sharedParams }).strict().safeParse(params);
+    if (!parsed.success) {
+      const issues = parsed.error.issues.map((i) => `${i.path.join('.') || 'params'}: ${i.message}`).join('; ');
+      return errorResult(new Error(`${name} action "${action}": ${issues}`));
+    }
+    return (a.handler ?? forward(a.command, a.timeoutMs))(parsed.data);
+  });
+}
+
 export function registerTools(server: McpServer) {
   // ───────────────────────────── status & project ─────────────────────────────
 
   server.registerTool('get_status', {
     title: 'Get Blockbench status',
-    description: 'Check the connection to Blockbench and get the app version, open project tabs, current project, "features" (which Blockbench 5.2 capabilities this install has: texture layer groups, IK poles, movable reference models, 3D reference images, shade direction override, ...) — and "paths": the user\'s home/desktop/temp folders and path separator. Call this first if other tools fail, or whenever you need an absolute path for save_project / export_model / render output (get_project_info returns more: last-used folder per file type and recent project paths).',
+    description: 'Check the connection to Blockbench and get the app version, open project tabs, current project, "features" (which Blockbench 5.2 capabilities this install has: texture layer groups, IK poles, movable reference models, 3D reference images, shade direction override, ...) — and "paths": the user\'s home/desktop/temp folders and path separator. Call this first if other tools fail, or whenever you need an absolute path for project_file save/export / render output (get_project_info returns more: last-used folder per file type and recent project paths).',
     inputSchema: {},
     annotations: readOnly,
   }, async () => {
@@ -97,7 +146,7 @@ export function registerTools(server: McpServer) {
 
   server.registerTool('get_project_info', {
     title: 'Get project info',
-    description: 'Full orientation snapshot of the current project: format capabilities, texture size, element/bone/texture/animation inventory, open tabs, and "paths" — the project save/export path, the user\'s home/desktop/temp/appdata folders, the folder they last saved each file type to (paths.last_used.model / texture / screenshot / gltf / animation ...) and recent project paths. Use those to build the absolute paths save_project and export_model require. Prefer this to orient yourself before editing.',
+    description: 'Full orientation snapshot of the current project: format capabilities, texture size, element/bone/texture/animation inventory, open tabs, and "paths" — the project save/export path, the user\'s home/desktop/temp/appdata folders, the folder they last saved each file type to (paths.last_used.model / texture / screenshot / gltf / animation ...) and recent project paths. Use those to build the absolute paths project_file save/export require. Prefer this to orient yourself before editing.',
     inputSchema: {},
     annotations: readOnly,
   }, forward('get_project_info'));
@@ -119,33 +168,67 @@ export function registerTools(server: McpServer) {
     annotations: mutating,
   }, forward('set_project_settings'));
 
-  server.registerTool('open_project', {
-    title: 'Open project file',
-    description: 'Open a model file from disk as a new project tab (.bbmodel, bedrock .geo.json, java block .json, .jem, ...).',
-    inputSchema: { path: z.string().describe('Absolute file path') },
-    annotations: mutating,
-  }, forward('open_project'));
-
-  server.registerTool('save_project', {
-    title: 'Save project (.bbmodel)',
-    description: 'Save the current project as a .bbmodel file (Blockbench native format, includes textures and animations). Use export_model for game-ready formats. Need a folder to write to? get_status / get_project_info return "paths" (home, desktop, temp, and the folder the user last saved each file type to) — no need to ask.',
-    inputSchema: { path: z.string().optional().describe('Absolute path ending in .bbmodel. Optional if the project was saved before. Build it from get_project_info "paths" (e.g. paths.desktop or paths.last_used.model).') },
-    annotations: mutating,
-  }, forward('save_project'));
-
-  server.registerTool('select_project_tab', {
-    title: 'Switch project tab',
-    description: 'Switch between open project tabs by uuid or name (see get_status).',
-    inputSchema: { uuid: z.string().describe('Project uuid or display name') },
-    annotations: mutating,
-  }, forward('select_project_tab'));
-
-  server.registerTool('close_project', {
-    title: 'Close project',
-    description: 'Close the current project tab. Fails if there are unsaved changes unless force is true.',
-    inputSchema: { force: z.boolean().optional().describe('Discard unsaved changes') },
-    annotations: destructive,
-  }, forward('close_project'));
+  registerGroup(server, 'project_file', {
+    title: 'Open, save, export, import, switch and close projects',
+    description: 'Project files and tabs. Paths must be ABSOLUTE — build them from get_status / get_project_info "paths" (home, desktop, temp, and the folder the user last saved each file type to: paths.last_used.model / gltf / obj / animation ...) — no need to ask.',
+    annotations: destructive, // "close" with force discards unsaved changes
+    actions: {
+      save: {
+        command: 'save_project',
+        description: 'Save the current project as a .bbmodel (Blockbench native: textures + animations included). "path" is optional if the project was saved before. Use "export" for game-ready formats.',
+        inputSchema: { path: z.string().optional().describe('Absolute file path (save: ends in .bbmodel; export: the output file; open/import: the input file)') },
+      },
+      export: {
+        command: 'export_model',
+        timeoutMs: 60_000,
+        description: 'Export to game/DCC formats without dialogs: bbmodel, bedrock_geo (.geo.json), java_block (.json), gltf, glb, obj (+mtl+textures), fbx, dae, stl, optifine_jem. Textures embed or export alongside depending on format.',
+        inputSchema: {
+          format: z.enum(['bbmodel', 'bedrock_geo', 'java_block', 'gltf', 'glb', 'obj', 'fbx', 'dae', 'stl', 'optifine_jem']).describe('export: any of these; get_json: bbmodel, bedrock_geo, java_block or gltf'),
+          path: z.string(),
+          options: z.record(z.string(), z.any()).optional().describe('export codec options, e.g. {scale: 1, embed_textures: true, animations: true} for gltf/glb. Armature rigs: {armature: true} exports skinned meshes; {merge_armature: true} (Blockbench 5.2) merges all meshes of an armature into ONE skinned mesh instead of one per mesh.'),
+        },
+      },
+      export_animations: {
+        command: 'export_animations',
+        description: 'Export animations to a Bedrock .animation.json file.',
+        inputSchema: {
+          path: z.string(),
+          animations: z.array(z.string()).optional().describe('export_animations: names/uuids (default: all)'),
+        },
+      },
+      get_json: {
+        command: 'get_model_json',
+        description: 'Return the compiled model file content inline without writing to disk — for inspection.',
+        inputSchema: {
+          format: z.enum(['bbmodel', 'bedrock_geo', 'java_block', 'gltf']).optional(),
+          max_length: z.number().optional().describe('get_json: truncation limit, default 60000 chars'),
+        },
+      },
+      open: {
+        command: 'open_project',
+        description: 'Open a model file from disk as a new project tab (.bbmodel, bedrock .geo.json, java block .json, .jem, ...).',
+        inputSchema: { path: z.string() },
+      },
+      import: {
+        command: 'import_model',
+        description: 'Import a model file as a new project tab, or merge a bedrock .geo.json into the current project.',
+        inputSchema: {
+          path: z.string(),
+          merge: z.boolean().optional().describe('import: merge into the current project (bedrock geometry only)'),
+        },
+      },
+      switch_tab: {
+        command: 'select_project_tab',
+        description: 'Switch between open project tabs by uuid or name (see get_status).',
+        inputSchema: { uuid: z.string().describe('switch_tab: project uuid or display name') },
+      },
+      close: {
+        command: 'close_project',
+        description: 'Close the current project tab. Fails if there are unsaved changes unless force is true.',
+        inputSchema: { force: z.boolean().optional().describe('close: discard unsaved changes') },
+      },
+    },
+  });
 
   // ───────────────────────────── outliner / geometry ─────────────────────────────
 
@@ -651,7 +734,7 @@ export function registerTools(server: McpServer) {
 
   server.registerTool('paint_texture', {
     title: 'Paint texture',
-    description: 'Draw on a texture with declarative ops (batched in one call, one undo step). Pass "layer" to paint into a separate texture layer (created if missing). Op types: "pixel" {pixels: [[x,y],...]}, "line" {from, to, thickness?}, "rect" {from, to, filled?, thickness?}, "ellipse" {center, radius: [rx,ry], filled?}, "fill" (bucket) {at, tolerance?}, "gradient" (see "stops" and "space"), "clear" {from, to}, "jagged_edge" (pixel-art fur teeth along one rect edge — mode "erase" cuts the silhouette into transparency for fur planes, mode "color" draws colored teeth), "noise" (seeded speckle of color/color2; with no target and no from/to it covers the WHOLE bitmap), "strands" (seeded fur dashes whose count and length scale with the target rect, so one op reads right on a small paw and a big flank). Every op takes "color" (CSS string) and "opacity" (0-1).\n\nTARGETING: "target": {element, face} paints one cube face; "target": {element, faces: "all" | ["north",...]} paints many, and "element" may be a GROUP (recurses into every cube in it) — one op then expands to one op per face. Targeted ops use NORMALIZED 0-1 coordinates mapped onto each face\'s UV rect; untargeted ops use absolute BITMAP pixels.\n\nSHADING ACROSS CUBES: a face-local gradient restarts on every cube, which makes a limb built from several cubes look banded. Pass "space": "world" on a gradient (with a face target) to position the stops along the MODEL\'s Y extent instead, so neighbouring cubes continue the same ramp seamlessly. For plain solid faces prefer paint_faces. Verify with get_texture, inspect_uv or capture_screenshot.',
+    description: 'Draw on a texture with declarative ops (batched in one call, one undo step). Pass "layer" to paint into a separate texture layer (created if missing). Op types: "pixel" {pixels: [[x,y],...]}, "line" {from, to, thickness?}, "rect" {from, to, filled?, thickness?}, "ellipse" {center, radius: [rx,ry], filled?}, "fill" (bucket) {at, tolerance?}, "gradient" (see "stops" and "space"), "clear" {from, to}, "jagged_edge" (pixel-art fur teeth along one rect edge — mode "erase" cuts the silhouette into transparency for fur planes, mode "color" draws colored teeth), "noise" (seeded speckle of color/color2; with no target and no from/to it covers the WHOLE bitmap), "strands" (seeded fur dashes whose count and length scale with the target rect, so one op reads right on a small paw and a big flank). Every op takes "color" (CSS string) and "opacity" (0-1).\n\nTARGETING: "target": {element, face} paints one cube face; "target": {element, faces: "all" | ["north",...]} paints many, and "element" may be a GROUP (recurses into every cube in it) — one op then expands to one op per face. Targeted ops use NORMALIZED 0-1 coordinates mapped onto each face\'s UV rect; untargeted ops use absolute BITMAP pixels.\n\nSHADING ACROSS CUBES: a face-local gradient restarts on every cube, which makes a limb built from several cubes look banded. Pass "space": "world" on a gradient (with a face target) to position the stops along the MODEL\'s Y extent instead, so neighbouring cubes continue the same ramp seamlessly. For plain solid faces prefer paint_faces. Verify with get_texture, uv action "inspect" or capture_screenshot.',
     inputSchema: {
       texture: z.string().optional().describe('Texture name/uuid (default: selected)'),
       layer: layerParam(),
@@ -738,48 +821,48 @@ export function registerTools(server: McpServer) {
 
   // ───────────────────────────── UV ─────────────────────────────
 
-  server.registerTool('set_cube_uv', {
-    title: 'Set cube UV',
-    description: 'Batch-edit cube UV mapping: per-face UV rects/rotation/texture, or box-UV mode with uv_offset. UV units span the project (or texture) UV size, not raw pixels.',
-    inputSchema: {
-      cubes: z.array(z.object({
-        id: z.string(),
-        box_uv: z.boolean().optional().describe('Switch UV mode'),
-        uv_offset: vec2().optional().describe('Box UV unwrap position'),
-        mirror_uv: z.boolean().optional(),
-        faces: facesSchema.optional(),
-      })).min(1),
-    },
+  registerGroup(server, 'uv', {
+    title: 'Inspect and edit UV mapping',
+    description: 'UV mapping of cubes and meshes. For a fresh paintable layout use generate_texture_template (cubes) or unwrap_mesh (meshes) instead.',
     annotations: mutating,
-  }, forward('set_cube_uv'));
-
-  server.registerTool('set_mesh_uv', {
-    title: 'Set mesh UV',
-    description: 'Set per-vertex UV coordinates of mesh faces. Get face/vertex keys from get_element.',
-    inputSchema: {
-      mesh: z.string(),
-      faces: z.record(z.string(), z.record(z.string(), vec2())).describe('{face_key: {vertex_key: [u, v]}}'),
+    actions: {
+      inspect: {
+        command: 'inspect_uv',
+        description: 'Diagnose how the texture actually maps onto the model — the first thing to run when a texture "looks wrong on the model" but the texture image itself looks fine. Reports, per cube face: UV rotation, mirrored rects, rects whose aspect does not match the face (stretched or turned 90°), UV rects SHARED by several faces (painting one repaints all), faces with no texture, fully transparent pixels inside a face rect (they render see-through), atlas coverage, and the bitmap-to-UV-grid scale (how many bitmap pixels one UV unit is — needed for absolute paint coordinates). Meshes: degenerate (unpaintable) UV polygons, texels shared by several faces, transparent texels inside faces. Plus texel density (texture px per model unit) min/median/max across cubes and meshes, flagging faces >1.5x off the median. Returns a "findings" list with severities plus the raw counts. NOTE: mirroring on "up"/"down" faces is Blockbench\'s normal box unwrap, not a defect. Read-only.',
+        inputSchema: {
+          texture: z.string().optional().describe('inspect: limit the report to one texture (default: all)'),
+          scan_pixels: z.boolean().optional().describe('inspect: scan each face rect for transparent pixels (default true; false = fast structural-only check on huge models)'),
+          max_samples: z.number().optional().describe('inspect: example faces listed per problem type, default 6'),
+        },
+      },
+      set_cube: {
+        command: 'set_cube_uv',
+        description: 'Batch-edit cube UV mapping: per-face UV rects/rotation/texture, or box-UV mode with uv_offset. UV units span the project (or texture) UV size, not raw pixels.',
+        inputSchema: {
+          cubes: z.array(z.object({
+            id: z.string(),
+            box_uv: z.boolean().optional().describe('Switch UV mode'),
+            uv_offset: vec2().optional().describe('Box UV unwrap position'),
+            mirror_uv: z.boolean().optional(),
+            faces: facesSchema.optional(),
+          })).min(1),
+        },
+      },
+      set_mesh: {
+        command: 'set_mesh_uv',
+        description: 'Set per-vertex UV coordinates of mesh faces. Get face/vertex keys from get_element.',
+        inputSchema: {
+          mesh: z.string(),
+          faces: z.record(z.string(), z.record(z.string(), vec2())).describe('set_mesh: {face_key: {vertex_key: [u, v]}}'),
+        },
+      },
+      auto: {
+        command: 'auto_uv',
+        description: 'Automatically size face UVs to match element dimensions (cubes) / auto-project (meshes).',
+        inputSchema: { elements: z.array(z.string()).optional().describe('auto: default all') },
+      },
     },
-    annotations: mutating,
-  }, forward('set_mesh_uv'));
-
-  server.registerTool('auto_uv', {
-    title: 'Auto-UV elements',
-    description: 'Automatically size face UVs to match element dimensions (cubes) / auto-project (meshes).',
-    inputSchema: { elements: z.array(z.string()).optional().describe('Default: all') },
-    annotations: mutating,
-  }, forward('auto_uv'));
-
-  server.registerTool('inspect_uv', {
-    title: 'Inspect UV mapping',
-    description: 'Diagnose how the texture actually maps onto the model — the first thing to run when a texture "looks wrong on the model" but the texture image itself looks fine. Reports, per cube face: UV rotation, mirrored rects, rects whose aspect does not match the face (stretched or turned 90°), UV rects SHARED by several faces (painting one repaints all), faces with no texture, fully transparent pixels inside a face rect (they render see-through), atlas coverage, and the bitmap-to-UV-grid scale (how many bitmap pixels one UV unit is — needed for absolute paint coordinates). Meshes: degenerate (unpaintable) UV polygons, texels shared by several faces, transparent texels inside faces. Plus texel density (texture px per model unit) min/median/max across cubes and meshes, flagging faces >1.5x off the median. Returns a "findings" list with severities plus the raw counts. NOTE: mirroring on "up"/"down" faces is Blockbench\'s normal box unwrap, not a defect.',
-    inputSchema: {
-      texture: z.string().optional().describe('Limit the report to one texture (default: all)'),
-      scan_pixels: z.boolean().optional().describe('Scan each face rect for transparent pixels (default true; set false for a fast structural-only check on huge models)'),
-      max_samples: z.number().optional().describe('Example faces listed per problem type, default 6'),
-    },
-    annotations: readOnly,
-  }, forward('inspect_uv'));
+  });
 
   server.registerTool('unwrap_mesh', {
     title: 'Unwrap meshes into UV islands',
@@ -1113,25 +1196,25 @@ export function registerTools(server: McpServer) {
 
   // ───────────────────────────── display / camera / io ─────────────────────────────
 
-  server.registerTool('set_display_transforms', {
-    title: 'Set item display transforms',
-    description: 'Configure how a java_block/bedrock_block item model is displayed in each slot: gui, ground, head, firstperson/thirdperson left/right hand, fixed (item frame), embedded, on_shelf (shelf block). A slot that was never set starts from the game defaults on bedrock_block (Blockbench 5.2), so you can change just one value.',
-    inputSchema: {
-      slot: z.enum(['thirdperson_righthand', 'thirdperson_lefthand', 'firstperson_righthand', 'firstperson_lefthand', 'ground', 'gui', 'head', 'fixed', 'embedded', 'on_shelf']),
-      rotation: vec3().optional(),
-      translation: vec3().optional(),
-      scale: vec3().optional(),
-      mirror: z.array(z.boolean()).length(3).optional(),
-    },
+  registerGroup(server, 'display_transforms', {
+    title: 'Item display transforms',
+    description: 'How a java_block/bedrock_block item model is displayed in each slot: gui, ground, head, firstperson/thirdperson left/right hand, fixed (item frame), embedded, on_shelf (shelf block).',
     annotations: mutating,
-  }, forward('set_display_transforms'));
-
-  server.registerTool('get_display_transforms', {
-    title: 'Get display transforms',
-    description: 'Read all configured display slots.',
-    inputSchema: {},
-    annotations: readOnly,
-  }, forward('get_display_transforms'));
+    actions: {
+      get: { command: 'get_display_transforms', description: 'Read all configured display slots.' },
+      set: {
+        command: 'set_display_transforms',
+        description: 'Configure one slot. A slot that was never set starts from the game defaults on bedrock_block (Blockbench 5.2), so you can change just one value.',
+        inputSchema: {
+          slot: z.enum(['thirdperson_righthand', 'thirdperson_lefthand', 'firstperson_righthand', 'firstperson_lefthand', 'ground', 'gui', 'head', 'fixed', 'embedded', 'on_shelf']),
+          rotation: vec3().optional(),
+          translation: vec3().optional(),
+          scale: vec3().optional(),
+          mirror: z.array(z.boolean()).length(3).optional(),
+        },
+      },
+    },
+  });
 
   server.registerTool('capture_screenshot', {
     title: 'Screenshot the model',
@@ -1215,47 +1298,6 @@ export function registerTools(server: McpServer) {
     annotations: mutating,
   }, forward('reference_images'));
 
-  server.registerTool('export_model', {
-    title: 'Export model',
-    description: 'Export to game/DCC formats without dialogs: bbmodel, bedrock_geo (.geo.json), java_block (.json), gltf, glb, obj (+mtl+textures), fbx, dae, stl, optifine_jem. Textures embed or export alongside depending on format.',
-    inputSchema: {
-      format: z.enum(['bbmodel', 'bedrock_geo', 'java_block', 'gltf', 'glb', 'obj', 'fbx', 'dae', 'stl', 'optifine_jem']),
-      path: z.string().describe('Absolute output file path — build it from get_project_info "paths" (paths.desktop, paths.last_used.gltf/obj/model, ...)'),
-      options: z.record(z.string(), z.any()).optional().describe('Codec options, e.g. {scale: 1, embed_textures: true, animations: true} for gltf/glb. Armature rigs: {armature: true} exports skinned meshes; {merge_armature: true} (Blockbench 5.2) merges all meshes of an armature into ONE skinned mesh instead of one per mesh.'),
-    },
-    annotations: mutating,
-  }, forward('export_model', 60_000));
-
-  server.registerTool('export_animations', {
-    title: 'Export animations (bedrock)',
-    description: 'Export animations to a Bedrock .animation.json file.',
-    inputSchema: {
-      path: z.string(),
-      animations: z.array(z.string()).optional().describe('Names/uuids (default: all)'),
-    },
-    annotations: mutating,
-  }, forward('export_animations'));
-
-  server.registerTool('import_model', {
-    title: 'Import model file',
-    description: 'Import a model file: as a new project tab, or merge a bedrock .geo.json into the current project.',
-    inputSchema: {
-      path: z.string(),
-      merge: z.boolean().optional().describe('Merge into current project (bedrock geometry only)'),
-    },
-    annotations: mutating,
-  }, forward('import_model'));
-
-  server.registerTool('get_model_json', {
-    title: 'Get compiled model JSON',
-    description: 'Return the compiled model file content inline (bedrock_geo/java_block/bbmodel/gltf) without writing to disk — for inspection.',
-    inputSchema: {
-      format: z.enum(['bbmodel', 'bedrock_geo', 'java_block', 'gltf']).optional(),
-      max_length: z.number().optional().describe('Truncation limit, default 60000 chars'),
-    },
-    annotations: readOnly,
-  }, forward('get_model_json'));
-
   // ───────────────────────────── pixel art ─────────────────────────────
 
   const pixelViewNames = 'side (model faces right — platformer), left, front, back, top, bottom, three_quarter / rpg (front tilted 30°), top_down (60°), side_three_quarter, isometric / isometric_right (2:1 pixel iso, 30° elevation, from the north-west), isometric_left, true_isometric, true_isometric_left';
@@ -1316,67 +1358,70 @@ export function registerTools(server: McpServer) {
     }
   };
 
-  server.registerTool('render_pixel_art', {
-    title: 'Render pixel-art sprite(s)',
-    description: `Render the model as GENUINE pixel art for 2D games — not a downscaled screenshot. Pixel-aligned orthographic frame (1 texel = whole pixels, origin on a pixel corner), no anti-aliasing, mode-filtered supersampling (no blended colours), cel shading with hue-shifted ramps, selective 1 px outline, depth inner lines, palette snapping in Oklab, binary alpha, cleanup. Views: ${pixelViewNames}; or "yaw"/"pitch" (camera azimuth 0 = front, 90 = the model faces right; elevation 0-90). Several presets at once via "views", or a rotation set via "directions" (4/8/16 — names: down, down_right, right, up_right, up, up_left, left, down_left = the way the model faces on screen). Returns one contact-strip preview image (zoomed) and, with "directory", writes the true-size PNGs. Frame sizes 16/32/64/128/256. Use export_pixel_sprites for animation sprite sheets.`,
-    inputSchema: {
-      view: z.string().optional().describe(`View preset (default "side"): ${pixelViewNames}`),
-      views: z.array(z.string()).optional().describe('Several presets in one call (e.g. ["side", "front", "three_quarter", "isometric"])'),
-      yaw: z.number().optional().describe('Camera azimuth override in degrees (0 = looking at the front, 90 = model faces right, 180 = back, 270 = model faces left)'),
-      pitch: z.number().optional().describe('Camera elevation override in degrees (0 = straight on, 30 = pixel iso / 3/4, 90 = top)'),
-      directions: z.number().optional().describe('Render a rotation set: 4, 8 or 16 yaws starting at the view\'s yaw. 1 = just the view (default).'),
-      mirror_directions: z.boolean().optional().describe('Render only the right-facing half of the set and mirror the rest (symmetric models only)'),
-      animation: z.string().optional().describe('Pose the model with this animation at "time" (default: rest pose)'),
-      time: z.number().optional().describe('Seconds into the animation'),
-      pose: z.enum(['rest', 'current']).optional().describe('Without "animation": rest = bind pose (default), current = whatever pose the viewport/timeline shows'),
-      directory: z.string().optional().describe('Absolute folder to write <name>_<view>.png at true size (created if missing)'),
-      name: z.string().optional().describe('File base name (default: project name)'),
-      normal_map: z.boolean().optional().describe('Also write <name>_<view>_normal.png (view-space normals) for engines that light sprites'),
-      ...pixelStyleSchema,
+  registerGroup(server, 'pixel_art', {
+    title: 'Pixel-art sprites and sprite sheets',
+    description: `Render the model as GENUINE pixel art for 2D games — not a downscaled screenshot. Pixel-aligned orthographic frame (1 texel = whole pixels, origin on a pixel corner), no anti-aliasing, mode-filtered supersampling (no blended colours), cel shading with hue-shifted ramps, selective 1 px outline, depth inner lines, palette snapping in Oklab, binary alpha, cleanup. Views: ${pixelViewNames}; or "yaw"/"pitch" (camera azimuth 0 = front, 90 = the model faces right; elevation 0-90). Rotation sets via "directions" (4/8/16 — names: down, down_right, right, up_right, up, up_left, left, down_left = the way the model faces on screen). Frame sizes 16/32/64/128/256. Shared params (render + export_sheet): size … preview_scale — frame size, scale, style preset, shading, outline, inner lines, palette, dither, cleanup.`,
+    annotations: mutating, // writes PNGs when a directory is given
+    actions: {
+      render: {
+        command: 'render_pixel_art',
+        handler: forwardWithDirectory('render_pixel_art', 180_000),
+        description: 'Still sprite(s): one view, several presets via "views", or a rotation set. Returns one contact-strip preview image (zoomed) and, with "directory", writes the true-size PNGs.',
+        sharedParams: pixelStyleSchema,
+        inputSchema: {
+          view: z.string().optional().describe(`View preset (default "side"): ${pixelViewNames}`),
+          views: z.array(z.string()).optional().describe('Several presets in one call (e.g. ["side", "front", "three_quarter", "isometric"])'),
+          yaw: z.number().optional().describe('Camera azimuth override in degrees (0 = looking at the front, 90 = model faces right, 180 = back, 270 = model faces left)'),
+          pitch: z.number().optional().describe('Camera elevation override in degrees (0 = straight on, 30 = pixel iso / 3/4, 90 = top)'),
+          directions: z.number().optional().describe('Render a rotation set: 4, 8 or 16 yaws starting at the view\'s yaw. 1 = just the view (default).'),
+          mirror_directions: z.boolean().optional().describe('Render only the right-facing half of the set and mirror the rest (symmetric models only)'),
+          animation: z.string().optional().describe('Pose the model with this animation at "time" (default: rest pose)'),
+          time: z.number().optional().describe('Seconds into the animation'),
+          pose: z.enum(['rest', 'current']).optional().describe('Without "animation": rest = bind pose (default), current = whatever pose the viewport/timeline shows'),
+          directory: z.string().optional().describe('Absolute folder to write <name>_<view>.png at true size (created if missing)'),
+          name: z.string().optional().describe('File base name (default: project name)'),
+          normal_map: z.boolean().optional().describe('Also write <name>_<view>_normal.png (view-space normals) for engines that light sprites'),
+        },
+      },
+      export_sheet: {
+        command: 'export_pixel_sprites',
+        handler: forwardWithDirectory('export_pixel_sprites', 600_000),
+        description: 'Render an animation (or several, or the static model) — optionally as a 4/8-direction set — into a pixel-art SPRITE SHEET with Aseprite-compatible JSON (frames with durations, frameTags per animation/direction, a "pivot" slice at the model origin = feet, plus a "pixelart" block with pixels_per_unit, directions and frame pivots), optional per-frame PNGs and a normal-map sheet. One scale and one pivot for the whole set (bounds are unioned over every pose and direction) so frames never jump. Frames are sampled at "fps" (default 12): a looping 1 s animation gives 12 frames. Rows: one per animation/direction, or a grid via output.columns. Returns a zoomed preview of the sheet.',
+        sharedParams: pixelStyleSchema,
+        inputSchema: {
+          animation: z.string().optional().describe('Animation name/uuid (omit for a static sprite)'),
+          animations: z.array(z.string()).optional().describe('Several animations in one sheet (each becomes a frame tag / row group)'),
+          fps: z.number().optional().describe('Frames per second to sample (default 12). Sets the frame durations in the JSON.'),
+          frames: z.number().optional().describe('Exact frame count per animation (overrides fps sampling; spread evenly over the length)'),
+          times: z.array(z.number()).optional().describe('Explicit times in seconds (single animation only)'),
+          pose: z.enum(['rest', 'current']).optional().describe('Static export only: rest = bind pose (default), current = the viewport/timeline pose'),
+          view: z.string().optional().describe(`View preset (default "side"): ${pixelViewNames}`),
+          yaw: z.number().optional(),
+          pitch: z.number().optional(),
+          directions: z.number().optional().describe('1 (default), 4, 8 or 16 directions starting at the view\'s yaw'),
+          mirror_directions: z.boolean().optional().describe('Render the right-facing half and mirror the rest (symmetric models only)'),
+          output: z.object({
+            directory: z.string().optional().describe('Absolute folder (created if missing). Without it nothing is written — only the preview comes back.'),
+            name: z.string().optional().describe('Base file name (default: <project>_<animation>)'),
+            sheet: z.boolean().optional().describe('Write <name>.png (default true)'),
+            json: z.union([z.enum(['hash', 'array', 'none']), z.boolean()]).optional().describe('Aseprite JSON format: hash (default), array, or none'),
+            frames: z.boolean().optional().describe('Also write every frame as <name>_<tag>_<index>.png next to the sheet (default false)'),
+            normal_map: z.boolean().optional().describe('Also write <name>_normal.png, a matching sheet of view-space normals (default false)'),
+            columns: z.number().optional().describe('Force a grid with this many columns instead of one row per animation/direction'),
+            padding: z.number().optional().describe('Transparent pixels between cells (default 1)'),
+            margin: z.number().optional().describe('Transparent border around the sheet (default 0)'),
+            extrude: z.number().optional().describe('Replicate each cell\'s edge pixels outward by N px to stop atlas bleeding (default 0)'),
+            pot: z.boolean().optional().describe('Pad the sheet to power-of-two dimensions'),
+            preview_file: z.boolean().optional().describe('Also write a zoomed <name>_preview.png'),
+          }).optional(),
+        },
+      },
+      presets: {
+        command: 'pixel_art_presets',
+        description: 'List the view presets (with camera angles), style presets, built-in palettes, direction names and default values.',
+      },
     },
-    annotations: mutating, // writes PNGs when "directory" is given
-  }, forwardWithDirectory('render_pixel_art', 180_000));
-
-  server.registerTool('export_pixel_sprites', {
-    title: 'Export pixel-art sprite sheet',
-    description: 'Render an animation (or several, or the static model) from a game view — optionally as a 4/8-direction set — into a pixel-art SPRITE SHEET with Aseprite-compatible JSON (frames with durations, frameTags per animation/direction, a "pivot" slice at the model origin = feet, plus a "pixelart" block with pixels_per_unit, directions and frame pivots), optional per-frame PNGs and a normal-map sheet. One scale and one pivot for the whole set (bounds are unioned over every pose and direction) so frames never jump. Same rendering/style options as render_pixel_art. Frames are sampled at "fps" (default 12): a looping 1 s animation gives 12 frames. Rows: one per animation/direction, or a grid via output.columns. Returns a zoomed preview of the sheet.',
-    inputSchema: {
-      animation: z.string().optional().describe('Animation name/uuid (omit for a static sprite)'),
-      animations: z.array(z.string()).optional().describe('Several animations in one sheet (each becomes a frame tag / row group)'),
-      fps: z.number().optional().describe('Frames per second to sample (default 12). Sets the frame durations in the JSON.'),
-      frames: z.number().optional().describe('Exact frame count per animation (overrides fps sampling; spread evenly over the length)'),
-      times: z.array(z.number()).optional().describe('Explicit times in seconds (single animation only)'),
-      pose: z.enum(['rest', 'current']).optional().describe('Static export only: rest = bind pose (default), current = the viewport/timeline pose'),
-      view: z.string().optional().describe(`View preset (default "side"): ${pixelViewNames}`),
-      yaw: z.number().optional(),
-      pitch: z.number().optional(),
-      directions: z.number().optional().describe('1 (default), 4, 8 or 16 directions starting at the view\'s yaw'),
-      mirror_directions: z.boolean().optional().describe('Render the right-facing half and mirror the rest (symmetric models only)'),
-      output: z.object({
-        directory: z.string().optional().describe('Absolute folder (created if missing). Without it nothing is written — only the preview comes back.'),
-        name: z.string().optional().describe('Base file name (default: <project>_<animation>)'),
-        sheet: z.boolean().optional().describe('Write <name>.png (default true)'),
-        json: z.union([z.enum(['hash', 'array', 'none']), z.boolean()]).optional().describe('Aseprite JSON format: hash (default), array, or none'),
-        frames: z.boolean().optional().describe('Also write every frame as <name>_<tag>_<index>.png next to the sheet (default false)'),
-        normal_map: z.boolean().optional().describe('Also write <name>_normal.png, a matching sheet of view-space normals (default false)'),
-        columns: z.number().optional().describe('Force a grid with this many columns instead of one row per animation/direction'),
-        padding: z.number().optional().describe('Transparent pixels between cells (default 1)'),
-        margin: z.number().optional().describe('Transparent border around the sheet (default 0)'),
-        extrude: z.number().optional().describe('Replicate each cell\'s edge pixels outward by N px to stop atlas bleeding (default 0)'),
-        pot: z.boolean().optional().describe('Pad the sheet to power-of-two dimensions'),
-        preview_file: z.boolean().optional().describe('Also write a zoomed <name>_preview.png'),
-      }).optional(),
-      ...pixelStyleSchema,
-    },
-    annotations: mutating,
-  }, forwardWithDirectory('export_pixel_sprites', 600_000));
-
-  server.registerTool('pixel_art_presets', {
-    title: 'Pixel-art presets',
-    description: 'List the view presets (with camera angles), style presets, built-in palettes, direction names and default values used by render_pixel_art / export_pixel_sprites.',
-    inputSchema: {},
-    annotations: readOnly,
-  }, forward('pixel_art_presets'));
+  });
 
   // ───────────────────────────── escape hatches ─────────────────────────────
 

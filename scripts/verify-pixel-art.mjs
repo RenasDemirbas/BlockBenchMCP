@@ -149,7 +149,7 @@ try {
   console.log(`Blockbench ${status.data.blockbench_version}, plugin ${status.data.plugin_version}\n`);
 
   console.log('0. presets');
-  const presets = await tool('pixel_art_presets');
+  const presets = await tool('pixel_art', { action: 'presets' });
   check('pixel_art_presets lists views, styles and palettes', presets.ok && presets.data?.views?.side && presets.data?.palettes?.pico8 && presets.data?.styles?.outlined, presets.text.slice(0, 200));
 
   // ── scratch model ─────────────────────────────────────────────────────────
@@ -197,7 +197,7 @@ try {
 
   // ── 2. flat render: exact texel colours, binary alpha, scale, pivot ───────
   console.log('\n2. flat side view (exactness)');
-  const flat = await tool('render_pixel_art', { view: 'side', size: 32, style: 'flat', palette: 'none', cleanup: 'none', directory: outDir, name: 'flat' });
+  const flat = await tool('pixel_art', { action: 'render', view: 'side', size: 32, style: 'flat', palette: 'none', cleanup: 'none', directory: outDir, name: 'flat' });
   check('render_pixel_art (flat) succeeds with an image', flat.ok && flat.content.some((c) => c.type === 'image'), flat.text.slice(0, 300));
   check('auto scale snapped to 1 px per unit (texel aligned)', flat.data?.pixels_per_unit === 1 && flat.data?.texel_size_px === 1, JSON.stringify({ ppu: flat.data?.pixels_per_unit, texel: flat.data?.texel_size_px }));
   check('pivot sits at bottom-centre (16, 31)', Array.isArray(flat.data?.pivot) && flat.data.pivot[0] === 16 && flat.data.pivot[1] === 31, JSON.stringify(flat.data?.pivot));
@@ -221,7 +221,7 @@ try {
 
   // ── 3. front view orientation ─────────────────────────────────────────────
   console.log('\n3. front view orientation + outlined style');
-  const front = await tool('render_pixel_art', { view: 'front', size: 32, style: 'flat', palette: 'none', directory: outDir, name: 'front' });
+  const front = await tool('pixel_art', { action: 'render', view: 'front', size: 32, style: 'flat', palette: 'none', directory: outDir, name: 'front' });
   if (front.ok && front.data?.files?.[0]) {
     const img = decodePng(front.data.files[0]);
     const greens = pixelsOf(img, isGreen), magentas = pixelsOf(img, isMagenta);
@@ -230,12 +230,12 @@ try {
     check('front view: east arm on the image LEFT, west arm on the RIGHT (viewer-facing)', greens.length && magentas.length && gx < 16 && mx > 16, `green x ${gx.toFixed(1)}, magenta x ${mx.toFixed(1)}`);
   } else check('front view rendered', false, front.text.slice(0, 200));
 
-  const parts = await tool('render_pixel_art', { view: 'front', size: 32, style: 'clean', inner_lines: 'parts', directory: outDir, name: 'parts' });
+  const parts = await tool('pixel_art', { action: 'render', view: 'front', size: 32, style: 'clean', inner_lines: 'parts', directory: outDir, name: 'parts' });
   check('part lines separate flush bones (arms/legs vs body)', parts.ok && (parts.data?.views?.[0]?.inner_line_pixels ?? 0) >= 10, JSON.stringify(parts.data?.views?.[0]));
-  const noParts = await tool('render_pixel_art', { view: 'front', size: 32, style: 'clean', inner_lines: 'none' });
+  const noParts = await tool('pixel_art', { action: 'render', view: 'front', size: 32, style: 'clean', inner_lines: 'none' });
   check('inner_lines none draws no lines', noParts.ok && !noParts.data?.views?.[0]?.inner_line_pixels, JSON.stringify(noParts.data?.views?.[0]));
 
-  const outlined = await tool('render_pixel_art', { view: 'side', size: 32, style: 'outlined', directory: outDir, name: 'outlined' });
+  const outlined = await tool('pixel_art', { action: 'render', view: 'side', size: 32, style: 'outlined', directory: outDir, name: 'outlined' });
   check('outlined style renders', outlined.ok, outlined.text.slice(0, 200));
   if (outlined.ok && outlined.data?.files?.[0]) {
     const img = decodePng(outlined.data.files[0]);
@@ -253,7 +253,7 @@ try {
 
   // ── 4. palettes ───────────────────────────────────────────────────────────
   console.log('\n4. palettes & dithering');
-  const pico = await tool('render_pixel_art', { view: 'three_quarter', size: 48, palette: 'pico8', dither: 'bayer4', dither_strength: 0.5, directory: outDir, name: 'pico8' });
+  const pico = await tool('pixel_art', { action: 'render', view: 'three_quarter', size: 48, palette: 'pico8', dither: 'bayer4', dither_strength: 0.5, directory: outDir, name: 'pico8' });
   check('pico8 palette render succeeds', pico.ok, pico.text.slice(0, 200));
   if (pico.ok && pico.data?.files?.[0]) {
     const PICO = new Set(presets.data ? [] : []);
@@ -265,19 +265,19 @@ try {
     check('every opaque pixel is a PICO-8 colour', off.length === 0 && a.colors.size >= 3, `off: ${off.slice(0, 5).join(', ')}`);
     check('three_quarter view has coverage', a.opaque > 100, `${a.opaque} opaque`);
   }
-  const auto = await tool('render_pixel_art', { view: 'isometric', size: 64, palette: 'auto', max_colors: 8, directory: outDir, name: 'auto8' });
+  const auto = await tool('pixel_art', { action: 'render', view: 'isometric', size: 64, palette: 'auto', max_colors: 8, directory: outDir, name: 'auto8' });
   if (auto.ok && auto.data?.files?.[0]) {
     const a = analyse(decodePng(auto.data.files[0]));
     check('palette auto with max_colors 8 yields ≤ 8 colours', a.colors.size <= 8 && a.colors.size >= 2, `${a.colors.size}`);
   } else check('isometric auto-palette render', false, auto.text.slice(0, 200));
-  const bad = await tool('render_pixel_art', { view: 'side', palette: 'not_a_palette' });
+  const bad = await tool('pixel_art', { action: 'render', view: 'side', palette: 'not_a_palette' });
   check('unknown palette lists the valid names', !bad.ok && /pico8/.test(bad.text) && /endesga32/.test(bad.text), bad.text.slice(0, 160));
-  const badView = await tool('render_pixel_art', { view: 'diagonal' });
+  const badView = await tool('pixel_art', { action: 'render', view: 'diagonal' });
   check('unknown view lists the presets', !badView.ok && /three_quarter/.test(badView.text), badView.text.slice(0, 160));
 
   // ── 5. sprite sheet export ────────────────────────────────────────────────
   console.log('\n5. sprite sheet export (walk, 4 directions)');
-  const sheet = await tool('export_pixel_sprites', { animation: 'walk', fps: 8, directions: 4, size: 32, output: { directory: outDir, name: 'walk4', frames: true, normal_map: true } });
+  const sheet = await tool('pixel_art', { action: 'export_sheet', animation: 'walk', fps: 8, directions: 4, size: 32, output: { directory: outDir, name: 'walk4', frames: true, normal_map: true } });
   check('export_pixel_sprites succeeds with a preview image', sheet.ok && sheet.content.some((c) => c.type === 'image'), sheet.text.slice(0, 400));
   if (sheet.ok) {
     const d = sheet.data;
@@ -306,7 +306,7 @@ try {
 
   // ── 6. mirrored 8-direction set ───────────────────────────────────────────
   console.log('\n6. mirrored 8 directions');
-  const eight = await tool('export_pixel_sprites', { view: 'three_quarter', directions: 8, mirror_directions: true, size: 32, style: 'clean', output: { directory: outDir, name: 'eight', frames: true } });
+  const eight = await tool('pixel_art', { action: 'export_sheet', view: 'three_quarter', directions: 8, mirror_directions: true, size: 32, style: 'clean', output: { directory: outDir, name: 'eight', frames: true } });
   check('8-direction static export succeeds', eight.ok, eight.text.slice(0, 300));
   if (eight.ok) {
     const d = eight.data;
@@ -326,20 +326,20 @@ try {
   console.log('\n7. sizes & explicit scale');
   // 20-unit model, 1 px padding: 16 px → 14/20 = 0.7 → ½ texel; 64 → 62/20 = 3.1 → 3; 128 → 126/20 = 6.3 → 6.
   for (const [size, ppu] of [[16, 0.5], [64, 3], [128, 6]]) {
-    const r = await tool('render_pixel_art', { view: 'side', size, directory: outDir, name: `size${size}` });
+    const r = await tool('pixel_art', { action: 'render', view: 'side', size, directory: outDir, name: `size${size}` });
     const ok = r.ok && r.data?.frame_size?.[0] === size;
     check(`size ${size} auto-fits to ${ppu} px per unit`, ok && r.data.pixels_per_unit === ppu && !r.data.warnings, JSON.stringify({ ppu: r.data?.pixels_per_unit, warnings: r.data?.warnings }));
   }
-  const clipped = await tool('render_pixel_art', { view: 'side', size: 16, pixels_per_unit: 2 });
+  const clipped = await tool('pixel_art', { action: 'render', view: 'side', size: 16, pixels_per_unit: 2 });
   check('a too-large explicit scale warns about clipping', clipped.ok && Array.isArray(clipped.data?.warnings) && /cut off/.test(clipped.data.warnings.join(' ')), clipped.text.slice(0, 200));
 
   // ── cleanup ──────────────────────────────────────────────────────────────
   for (const uuid of scratch.reverse()) {
     if (!uuid) continue;
-    const sel = await tool('select_project_tab', { uuid });
-    if (sel.ok) await tool('close_project', { force: true });
+    const sel = await tool('project_file', { action: 'switch_tab', uuid });
+    if (sel.ok) await tool('project_file', { action: 'close', force: true });
   }
-  if (originalTab) await tool('select_project_tab', { uuid: originalTab });
+  if (originalTab) await tool('project_file', { action: 'switch_tab', uuid: originalTab });
 
   console.log(`\n${failures.length ? 'FAILED' : 'OK'} — ${passed} passed, ${failures.length} failed. Outputs: ${outDir}`);
   if (failures.length) {

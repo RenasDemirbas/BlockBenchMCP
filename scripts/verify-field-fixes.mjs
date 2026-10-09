@@ -184,8 +184,8 @@ try {
     `${wholeModel.data?.cropped_to?.faces?.length} faces`);
 
   // ── cleanup ─────────────────────────────────────────────────────────────
-  await tool('close_project', { force: true });
-  if (originalTab) await tool('select_project_tab', { uuid: originalTab });
+  await tool('project_file', { action: 'close', force: true });
+  if (originalTab) await tool('project_file', { action: 'switch_tab', uuid: originalTab });
   const after = await tool('get_status');
   check('scratch project closed and the original tab restored',
     !after.data?.open_tabs?.some((t) => t.name?.includes(scratchName))

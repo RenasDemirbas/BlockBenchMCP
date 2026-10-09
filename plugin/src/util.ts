@@ -100,7 +100,7 @@ export function resolveAnimation(id?: string): any {
 }
 
 /**
- * Where files can be written. save_project/export_model need absolute paths,
+ * Where files can be written. project_file save/export need absolute paths,
  * and there was previously no way to learn one from inside the MCP — callers
  * either guessed or reached for require('os'), which trips Blockbench's modal
  * permission prompt (see eval_code's guard). `SystemInfo` is a plain global and
@@ -115,7 +115,7 @@ export function systemPaths(detailed = false): any {
     temp: info.temp_directory,
     platform: info.platform,
     separator: typeof PathModule !== 'undefined' ? PathModule.sep : undefined,
-    note: 'save_project / export_model / eval_code(result_file) need ABSOLUTE paths — build one from these. "last_used" is the folder the user last saved that file type to.',
+    note: 'project_file save/export / eval_code(result_file) need ABSOLUTE paths — build one from these. "last_used" is the folder the user last saved that file type to.',
   };
   if (detailed) {
     out.appdata = info.appdata_directory;
