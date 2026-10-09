@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.7.1 — Pixel-art parameter descriptions
+
+- `pixel_art`: `animation`, `pose`, `directions` and `mirror_directions` are shared by `render` and
+  `export_sheet`, but 1.7.0 showed only the `render` description. `animation` lost the
+  "omit for a static sprite" hint for sprite sheets. Each is now defined once with a description
+  that covers both actions.
+- Grouped tools refuse to start if two actions describe the same parameter differently, so this
+  can't happen silently again.
+
 ## 1.7.0 — Fewer tools
 
 - Fewer tools (82 → 69): rarely used tools are grouped into one tool with an `action` argument, so
