@@ -1,61 +1,61 @@
 # Blockbench MCP
 
-Blockbench'i Claude'dan kontrol etmek için bir MCP sunucusu ve ona eşlik eden Blockbench eklentisi.
+An MCP server and a companion Blockbench plugin that let Claude control Blockbench.
 
-Claude bununla model kurar, UV açar, doku boyar, kemik ve animasyon ekler, sonucu ekran görüntüsüyle
-kontrol eder ve modeli Blockbench'in desteklediği formatlarda dışa aktarır. Minecraft tarzı küp
-modellerin yanında low-poly, elle boyanmış karakterler de yapabilir. Modeli 2D oyunlar için pixel art
-sprite'lara da çevirebilir.
+With it, Claude builds models, unwraps UVs, paints textures, adds bones and animations, checks the
+result with screenshots, and exports the model to any format Blockbench supports. Besides
+Minecraft-style cube models, it can make low-poly, hand-painted characters. It can also turn a model
+into pixel art sprites for 2D games.
 
-Yaptığı her değişiklik Blockbench'in geri alma geçmişine yazılır. Beğenmediğin adımı `Ctrl+Z` ile geri
-alabilirsin.
+Every change goes into Blockbench's undo history. Press `Ctrl+Z` to revert any step you don't like.
 
 | | |
 |---|---|
-| **Sürüm** | 1.6.1 · [Sürüm notları](CHANGELOG.md) |
-| **Blockbench** | 5.2 ve üstü önerilir. 5.1.4 de çalışır, ama 5.2'ye özgü araçlar orada "5.2 gerekir" hatası verir. |
-| **İstemci** | Claude Desktop ve Claude Code. Geliştirme Windows'ta yapıldı. |
-| **Node.js** | 18 ve üstü |
-| **Araç sayısı** | 82 |
+| **Version** | 1.6.1 · [Changelog](CHANGELOG.md) |
+| **Blockbench** | 5.2 or later recommended. 5.1.4 also works, but 5.2-only tools return a "requires 5.2" error there. |
+| **Client** | Claude Desktop and Claude Code. Developed on Windows. |
+| **Node.js** | 18 or later |
+| **Tools** | 82 |
 
-> **1.6.0 veya daha eski bir sürüm kullanıyorsan güncelle.** Eski sürümlerde, Blockbench ve MCP açıkken
-> tarayıcında açık olan bir web sitesi köprüye bağlanıp bilgisayarında kod çalıştırabiliyordu. 1.6.1
-> bunu kapatır. Ayrıntı: [Güvenlik](#güvenlik).
+> **If you use version 1.6.0 or older, update.** In older versions, while Blockbench and the MCP server
+> were running, any website open in your browser could connect to the bridge and run code on your
+> computer. 1.6.1 closes this. Details: [Security](#security).
 
-## Neler yapabilir
+## What it can do
 
-| Alan | Kapsam |
+| Area | Coverage |
 |---|---|
-| Modelleme | Küp, mesh, plane, locator, bounding box. Gruplar animasyonda kemik olarak kullanılır. Simetrik parçalar için `mirror` ve `mirror_elements`. Hazır mesh şekilleri: plane, piramit, silindir, koni, küre, torus, icosphere, octahedron, dodecahedron. |
-| Low-poly | Kesitlerden uzuv ve tüp (`add_loft`). Extrude, inset, loop cut, bevel, solidify, subdivide (`edit_mesh`). Taper, bend, twist, smooth (`transform_mesh`). |
-| Doku | Şablon üretimi, katmanlar ve katman grupları, gradyan, gürültü, kürk çizgisi (`strands`), tırtıklı kenar (`jagged_edge`), küp ve mesh yüzlerine boyama. Işık, AO ve kenar bake'i (`bake_texture`). Ton kaydıran renk rampaları ve palete sabitleme (`palette`). |
-| UV | Mesh UV açma: adalar, dikişler, parça başına yoğunluk (`unwrap_mesh`). Küp UV'si, otomatik UV, UV teşhisi (`inspect_uv`). |
-| Animasyon | Keyframe (Molang ifadeleriyle), ayna keyframe, 20 hazır hareket, efekt keyframe'leri, IK ve pole, IK'yi normal keyframe'e çevirme. |
-| Kontrol | Ekran görüntüsü, çoklu açı görüntüsü, animasyon önizlemesi, animasyon sırasında kesişme ve zemin teması kontrolü, yapım süreci GIF'i (`record_build`). |
-| Referans | Referans görselle siluet karşılaştırma (`compare_reference`), referansı dokuya yansıtma (`project_reference`), sahnede referans model ve 3D referans görsel. |
-| Export | bbmodel, Bedrock geo.json, Java block, glTF/GLB, OBJ, FBX, DAE, STL, OptiFine JEM, animasyon JSON. |
-| Pixel art | Tek kare, 4/8/16 yönlü setler, Aseprite JSON'lu sprite sheet. |
+| Modeling | Cubes, meshes, planes, locators, bounding boxes. Groups act as bones in animations. `mirror` and `mirror_elements` for symmetric parts. Mesh primitives: plane, pyramid, cylinder, cone, sphere, torus, icosphere, octahedron, dodecahedron. |
+| Low-poly | Limbs and tubes from cross-sections (`add_loft`). Extrude, inset, loop cut, bevel, solidify, subdivide (`edit_mesh`). Taper, bend, twist, smooth (`transform_mesh`). |
+| Texturing | Template generation, layers and layer groups, gradients, noise, fur strands (`strands`), jagged edges (`jagged_edge`), painting on cube and mesh faces. Light, AO and edge baking (`bake_texture`). Hue-shifted color ramps and palette locking (`palette`). |
+| UV | Mesh unwrapping with islands, seams and per-part density (`unwrap_mesh`). Cube UV, auto UV, UV diagnostics (`inspect_uv`). |
+| Animation | Keyframes (with Molang expressions), mirrored keyframes, 20 motion presets, effect keyframes, IK with poles, baking IK into plain keyframes. |
+| Checking | Screenshots, multi-view captures, animation previews, intersection and ground-contact checks during animation, build timelapse GIF (`record_build`). |
+| Reference | Silhouette comparison against a reference image (`compare_reference`), projecting a reference onto the texture (`project_reference`), reference models and 3D reference images in the scene. |
+| Export | bbmodel, Bedrock geo.json, Java block, glTF/GLB, OBJ, FBX, DAE, STL, OptiFine JEM, animation JSON. |
+| Pixel art | Single frames, 4/8/16-direction sets, sprite sheets with Aseprite JSON. |
 
-### Blockbench 5.2 ile gelenler
+### What Blockbench 5.2 adds
 
-5.2'de şunlar da açılır: doku katman grupları, pole destekli IK, sahnede hareket ettirilebilen referans
-modeller, 3D panel olarak gösterilen referans görseller, Java 26.3 `shade_direction_override`, cushion
-skin şablonu, Molang `variable_placeholders`, bounding box, `embedded` ve `on_shelf` display slotları,
-glTF `merge_armature`. Bu Blockbench'te hangilerinin olduğunu `get_status` çıktısındaki `features`
-alanı gösterir.
+5.2 also unlocks: texture layer groups, IK with poles, movable reference models in the scene,
+reference images shown as 3D panels, Java 26.3 `shade_direction_override`, the cushion skin template,
+Molang `variable_placeholders`, bounding boxes, the `embedded` and `on_shelf` display slots, and glTF
+`merge_armature`. The `features` field in the `get_status` output shows which of these your Blockbench
+has.
 
-## Kurulum
+## Installation
 
-### Hızlı yol: hazır sürüm
+### Quick start: prebuilt release
 
-1. [Son sürüm](https://github.com/RenasDemirbas/BlockBenchMCP/releases/latest) sayfasından
-   `blockbench_mcp.js` ve `mcp-server.js` dosyalarını indir. İkisi zip olarak da var. `npm install`
-   gerekmez, sunucu bağımlılıklarıyla birlikte paketlendi.
-2. İki dosyayı kalıcı bir klasöre koy. Blockbench eklentiyi bu yoldan yükler, klasörü taşırsan
-   eklentiyi yeniden yüklemen gerekir.
-3. [Eklentiyi Blockbench'e yükle](#eklentiyi-blockbenche-yükle) ve [Claude'a tanıt](#claudea-tanıt).
+1. Download `blockbench_mcp.js` and `mcp-server.js` from the
+   [latest release](https://github.com/RenasDemirbas/BlockBenchMCP/releases/latest). Both are also
+   available as a zip. No `npm install` needed: the server is bundled with its dependencies.
+2. Put both files in a permanent folder. Blockbench loads the plugin from this path; if you move the
+   folder, you have to load the plugin again.
+3. [Install the plugin in Blockbench](#install-the-plugin-in-blockbench) and
+   [register the server with Claude](#register-with-claude).
 
-### Kaynaktan derleme
+### Build from source
 
 ```bash
 git clone https://github.com/RenasDemirbas/BlockBenchMCP.git
@@ -64,270 +64,271 @@ npm install
 npm run build
 ```
 
-Derleme sonunda `dist/` altında iki dosya oluşur:
+The build creates two files in `dist/`:
 
-- `blockbench_mcp.js`: Blockbench eklentisi
-- `mcp-server.js`: MCP sunucusu (bağımlılıkları `node_modules` içinden okur)
+- `blockbench_mcp.js`: the Blockbench plugin
+- `mcp-server.js`: the MCP server (reads its dependencies from `node_modules`)
 
-Tek dosyalık, bağımlılıkları içine gömülü sunucu için `npm run build:release`.
+For a single-file server with dependencies bundled in, run `npm run build:release`.
 
-### Eklentiyi Blockbench'e yükle
+### Install the plugin in Blockbench
 
-1. Blockbench'i aç ve **File → Plugins** menüsüne gir.
-2. Sağ üstteki menüden **Load Plugin from File**'ı seç.
-3. `blockbench_mcp.js` dosyasını göster ve güvenlik uyarısını onayla.
+1. Open Blockbench and go to **File → Plugins**.
+2. In the top-right menu, choose **Load Plugin from File**.
+3. Select `blockbench_mcp.js` and accept the security prompt.
 
-### Claude'a tanıt
+### Register with Claude
 
 **Claude Code:**
 
 ```bash
-claude mcp add --scope user blockbench -- node /yol/mcp-server.js
+claude mcp add --scope user blockbench -- node /path/to/mcp-server.js
 ```
 
-**Claude Desktop:** `%APPDATA%\Claude\claude_desktop_config.json` dosyasındaki `mcpServers` bölümüne ekle:
+**Claude Desktop:** add this to the `mcpServers` section of `%APPDATA%\Claude\claude_desktop_config.json`:
 
 ```json
 "blockbench": {
   "command": "node",
-  "args": ["C:\\yol\\mcp-server.js"],
+  "args": ["C:\\path\\to\\mcp-server.js"],
   "env": { "BB_BRIDGE_PORT": "8188" }
 }
 ```
 
-Ardından Claude Desktop'ı sistem tepsisinden tamamen kapatıp yeniden aç.
+Then fully quit Claude Desktop from the system tray and reopen it.
 
-İkisi aynı anda çalışabilir. Portu ilk alan sunucu köprü görevini üstlenir, diğerleri komutlarını onun
-üzerinden iletir.
+Both can run at the same time. The first server to take the port becomes the bridge; the others relay
+their commands through it.
 
-### Bağlantıyı kontrol et
+### Check the connection
 
-Blockbench açıkken Claude'a "Blockbench durumunu kontrol et" de. `get_status` bağlı bir Blockbench
-sürümü döndürmelidir. Bağlantı yoksa [Sorun giderme](#sorun-giderme) bölümüne bak.
+With Blockbench open, ask Claude to "check the Blockbench status". `get_status` should return a
+connected Blockbench version. If it doesn't, see [Troubleshooting](#troubleshooting).
 
-### Güncelleme
+### Updating
 
-1. Yeni `blockbench_mcp.js` ve `mcp-server.js` dosyalarını eskilerin üstüne yaz (ya da `git pull` ve
+1. Overwrite `blockbench_mcp.js` and `mcp-server.js` with the new files (or `git pull` and
    `npm run build`).
-2. Blockbench'i yeniden başlat.
-3. Claude Desktop'ı veya Claude Code oturumunu yeniden başlat. Çalışan sunucu eski sürümde kalır.
+2. Restart Blockbench.
+3. Restart Claude Desktop or your Claude Code session. The running server stays on the old version.
 
-`get_status` çıktısındaki `plugin_version` yeni sürümü göstermelidir.
+`plugin_version` in the `get_status` output should show the new version.
 
-## Önerilen çalışma biçimi
+## Recommended workflow
 
-Modeli tek seferde istemek yerine aşama aşama ilerlemek daha iyi sonuç veriyor. Her aşamadan sonra
-ekran görüntüsüne bakıp düzeltme istemek, en sonda toplu düzeltme yapmaktan daha az iş çıkarır.
+Building the model step by step works better than asking for everything at once. Checking a
+screenshot after each step and asking for fixes is less work than fixing everything at the end.
 
-### Küp model (Minecraft tarzı varlık)
+### Cube model (Minecraft-style entity)
 
-1. **Proje ve iskelet.** Formatı seç (`create_project`), sonra kemik ağacını kur (`add_groups`). Örneğin
-   `body > head`, `body > leg_fl`. Animasyon bu gruplara uygulanacağı için bu adımı atlama.
-2. **Geometri.** Küpleri gruplara yerleştir (`add_cubes`). Simetrik bacak ve kollar için `mirror: true`.
-   Kürk, yaprak gibi ince parçalar için `add_planes`.
-3. **Kontrol.** `capture_multi_view` ile önden, yandan ve üstten bak. Oranlar burada düzeltilir; doku
-   boyandıktan sonra geometri değiştirmek UV'leri bozar.
-4. **Doku.** Önce `generate_texture_template`, sonra `paint_texture` / `paint_faces`. Şablon olmadan
-   birçok yüz aynı UV alanını paylaşır ve birini boyamak diğerlerini de boyar.
-5. **Animasyon.** `create_animation`, `set_keyframes`, sol-sağ eşleşmesi için `mirror_keyframes`.
-   Sonra `validate_model` ile animasyon sırasında iç içe geçen parça var mı, `query_geometry` ile ayaklar
-   zemine basıyor mu kontrol et.
-6. **Export.** `export_model` ve `export_animations`. 2D oyun için `export_pixel_sprites`.
+1. **Project and skeleton.** Pick a format (`create_project`), then build the bone tree
+   (`add_groups`), for example `body > head`, `body > leg_fl`. Animations apply to these groups, so
+   don't skip this step.
+2. **Geometry.** Place cubes inside the groups (`add_cubes`). Use `mirror: true` for symmetric legs and
+   arms. Use `add_planes` for thin parts like fur or leaves.
+3. **Check.** Look from the front, side and top with `capture_multi_view`. Fix proportions here;
+   changing geometry after painting breaks the UVs.
+4. **Texture.** First `generate_texture_template`, then `paint_texture` / `paint_faces`. Without the
+   template, many faces share one UV area and painting one repaints the others.
+5. **Animation.** `create_animation`, `set_keyframes`, and `mirror_keyframes` for left-right pairs.
+   Then use `validate_model` to check for parts intersecting during the animation, and
+   `query_geometry` to check that the feet touch the ground.
+6. **Export.** `export_model` and `export_animations`. For 2D games, `export_pixel_sprites`.
 
-Örnek istek:
+Example request:
 
-> Bedrock entity formatında bir kurt modeli yap. Önce sadece iskelet ve gri küplerle şekli kur, üç
-> açıdan görüntü göster. Onaylarsam doku ve yürüme animasyonuna geçelim.
+> Make a wolf model in the Bedrock entity format. First build only the skeleton and the shape with gray
+> cubes, and show me three views. If I approve, move on to the texture and a walk animation.
 
-### Low-poly, elle boyanmış karakter
+### Low-poly, hand-painted character
 
-PS1 tarzı, dokusu elle boyanmış karakterler için `free` formatında önerilen sıra:
+Recommended order for PS1-style characters with hand-painted textures, in the `free` format:
 
-1. **Referans.** `compare_reference` ile referans görseli aynı açıdan karşılaştır. Araç siluet
-   benzerliğini (IoU) verir ve her yükseklik bandında modelin ne kadar geniş ya da dar kaldığını birim
-   cinsinden söyler.
-2. **Blok model.** Kollar, bacaklar, pantolon ve gövde için `add_loft`: halkaların merkezini ve
-   boyutunu verirsin, sivrilen ve bükülen kutu uzuv çıkar. Şapka kenarı için `add_mesh_primitive`
-   cylinder, pelerin için plane + `edit_mesh` solidify.
-3. **Şekillendirme.** `transform_mesh` ile taper/bend/twist, `edit_mesh` ile extrude/inset/loop cut.
-   Adımlar `select: "previous"` ile zincirlenir, yani extrude → inset → extrude tek çağrıda olur. Kutu
-   parçaları `bevel` ile yumuşat. Her adımdan sonra tekrar `compare_reference`.
-4. **UV.** `unwrap_mesh {pixel_density: 32-64, density_scale: {"head": 2}}`. Uzuvlar tek şerit ada
-   olarak açılır. Önceden boyanmış piksel varsa yeni düzene taşınır.
-5. **Düz renk.** `palette {action: "ramp"}` ile renk rampalarını seç, `paint_faces` ile düz renk ver.
-   Mesh'lerde `faces: ["up"]` yukarı bakan yüzleri seçer. İstersen başlangıç için
-   `project_reference` ile referansı dokuya yansıt.
-6. **Bake.** `bake_texture {layer: "shading"}` ışığı, AO'yu ve kenar parlamasını ton kaydıran pixel-art
-   basamakları olarak boyar. Ayrı katmana yazdığı için tekrar bake etmek gölgeyi üst üste bindirmez.
-7. **Temizlik.** `palette {action: "quantize"}` ile kaçak renkleri palete sabitle.
-8. **Kayıt.** Başta `record_build {action: "start"}` dersen her düzenleme bir kare olur. Sonda `stop`
-   parça parça yapım GIF'ini yazar.
+1. **Reference.** Compare against the reference image from the same angle with `compare_reference`.
+   The tool reports silhouette similarity (IoU) and, for each height band, how much wider or narrower
+   the model is, in units.
+2. **Blockout.** Use `add_loft` for arms, legs, trousers and torso: give the center and size of each
+   ring and you get a tapering, bending box limb. Use an `add_mesh_primitive` cylinder for a hat brim,
+   and a plane + `edit_mesh` solidify for a cape.
+3. **Shaping.** Taper/bend/twist with `transform_mesh`, extrude/inset/loop cut with `edit_mesh`. Steps
+   chain with `select: "previous"`, so extrude → inset → extrude happens in one call. Soften boxy parts
+   with `bevel`. Run `compare_reference` again after each step.
+4. **UV.** `unwrap_mesh {pixel_density: 32-64, density_scale: {"head": 2}}`. Limbs unwrap as single
+   strip islands. Pixels painted earlier are carried over to the new layout.
+5. **Flat colors.** Pick color ramps with `palette {action: "ramp"}` and fill flat colors with
+   `paint_faces`. On meshes, `faces: ["up"]` selects the upward-facing faces. Optionally, project the
+   reference onto the texture with `project_reference` as a starting point.
+6. **Bake.** `bake_texture {layer: "shading"}` paints light, AO and edge highlights as hue-shifted
+   pixel-art steps. It writes to its own layer, so baking again doesn't stack shadows.
+7. **Cleanup.** Lock stray colors to the palette with `palette {action: "quantize"}`.
+8. **Recording.** Call `record_build {action: "start"}` at the beginning and every edit becomes a
+   frame. `stop` at the end writes a part-by-part build GIF.
 
-Bu akışın tamamını gösteren hazır bir örnek var. Dört kollu, gaz maskeli bir silahşor karakteri kurar
-ve yapımı GIF olarak kaydeder. Senin açık modeline dokunmaz, yeni bir sekmede çalışır:
+A ready-made example runs this whole workflow. It builds a four-armed, gas-masked gunslinger and
+records the build as a GIF. It works in a new tab and doesn't touch your open model:
 
 ```bash
-OUT=C:/cikti/klasoru node scripts/examples/build-gunslinger.mjs
+OUT=C:/output/folder node scripts/examples/build-gunslinger.mjs
 ```
 
-### Koordinat kuralları
+### Coordinate conventions
 
-- 1 birim = 1/16 blok. Y yukarı bakar, zemin y=0.
-- +X doğu, -Z kuzey. Varlıklar kuzeye (-Z) bakacak şekilde modellenir; `north` kamera açısı önü gösterir.
-- Rotasyonlar derece cinsindendir, sıra ZYX. +X sarkan bir uzvu öne doğru savurur.
+- 1 unit = 1/16 block. Y is up; the ground is y=0.
+- +X is east, -Z is north. Entities are modeled facing north (-Z); the `north` camera preset shows the
+  front.
+- Rotations are in degrees, order ZYX. +X swings a hanging limb forward.
 
-## Araçlar
+## Tools
 
-| Alan | Araçlar |
+| Area | Tools |
 |---|---|
-| Proje | `get_status`, `list_formats`, `create_project`, `get_project_info`, `set_project_settings`, `open_project`, `save_project`, `select_project_tab`, `close_project` |
-| Geometri | `add_groups`, `add_cubes`, `add_meshes`, `add_mesh_primitive`, `add_loft`, `edit_mesh`, `transform_mesh`, `add_planes`, `add_locators`, `add_bounding_boxes`, `list_outline`, `get_element`, `update_elements`, `delete_elements`, `duplicate_elements`, `mirror_elements`, `select_elements` |
-| Doku | `create_texture`, `generate_texture_template`, `list_textures`, `get_texture`, `import_texture`, `apply_texture`, `paint_texture`, `paint_faces`, `bake_texture`, `palette`, `texture_layers`, `resize_texture`, `set_texture_resolution`, `delete_texture` |
+| Project | `get_status`, `list_formats`, `create_project`, `get_project_info`, `set_project_settings`, `open_project`, `save_project`, `select_project_tab`, `close_project` |
+| Geometry | `add_groups`, `add_cubes`, `add_meshes`, `add_mesh_primitive`, `add_loft`, `edit_mesh`, `transform_mesh`, `add_planes`, `add_locators`, `add_bounding_boxes`, `list_outline`, `get_element`, `update_elements`, `delete_elements`, `duplicate_elements`, `mirror_elements`, `select_elements` |
+| Texture | `create_texture`, `generate_texture_template`, `list_textures`, `get_texture`, `import_texture`, `apply_texture`, `paint_texture`, `paint_faces`, `bake_texture`, `palette`, `texture_layers`, `resize_texture`, `set_texture_resolution`, `delete_texture` |
 | UV | `unwrap_mesh`, `set_cube_uv`, `set_mesh_uv`, `auto_uv`, `inspect_uv` |
-| Animasyon | `create_animation`, `list_animations`, `get_animation`, `update_animation`, `delete_animation`, `set_keyframes`, `edit_keyframes`, `mirror_keyframes`, `add_effect_keyframes`, `apply_animation_preset`, `variable_placeholders`, `preview_animation`, `render_animation` |
+| Animation | `create_animation`, `list_animations`, `get_animation`, `update_animation`, `delete_animation`, `set_keyframes`, `edit_keyframes`, `mirror_keyframes`, `add_effect_keyframes`, `apply_animation_preset`, `variable_placeholders`, `preview_animation`, `render_animation` |
 | IK | `add_ik_controllers`, `bake_ik_animation` |
-| Kontrol | `validate_model`, `query_geometry`, `capture_screenshot`, `capture_multi_view`, `record_build` |
-| Referans | `compare_reference`, `project_reference` |
-| Sahne | `preview_models`, `reference_images` |
+| Checking | `validate_model`, `query_geometry`, `capture_screenshot`, `capture_multi_view`, `record_build` |
+| Reference | `compare_reference`, `project_reference` |
+| Scene | `preview_models`, `reference_images` |
 | Pixel art | `render_pixel_art`, `export_pixel_sprites`, `pixel_art_presets` |
 | Display | `set_display_transforms`, `get_display_transforms` |
-| Dosya | `export_model`, `export_animations`, `import_model`, `get_model_json` |
-| Diğer | `run_action`, `eval_code`, `undo`, `redo` |
+| Files | `export_model`, `export_animations`, `import_model`, `get_model_json` |
+| Other | `run_action`, `eval_code`, `undo`, `redo` |
 
-Her aracın parametreleri MCP şemasında açıklanmıştır. Claude bunları kendisi okur.
+Each tool's parameters are described in its MCP schema. Claude reads them on its own.
 
-## İpuçları
+## Tips
 
-### Doku boyama
+### Texture painting
 
-- `target: {element: "leg_fl", faces: "all"}` ile bir grubun tüm küplerini tek işlemde boyayabilirsin.
-  Tüm model için `element: "*"`.
-- Gradyanlara `space: "world"` ver. Bu ayar olmadan gradyan her küpte baştan başlar ve çok parçalı
-  uzuvlar bantlı görünür. Çok duraklı gradyan için `stops`.
-- Gölgeyi ayrı bir katmana boyayıp (`layer`) katmanı `multiply` moduna ve %50 opaklığa almak, sonradan
-  ayarlamayı kolaylaştırır.
-- Kürk siluetleri için `jagged_edge`, kürk dokusu için `strands`.
-- Doku resim olarak doğru ama modelde yanlış görünüyorsa önce `inspect_uv` çalıştır. Tek bir yüzü
-  yakından görmek için `get_texture` o yüzün UV bölgesini kırpıp büyütür.
-- Model soluk ya da ızgaralı görünüyorsa sebep genelde dokuda değildir. Blockbench'in `brightness` ve
-  `pixel_grid` ayarlarını kontrol et.
+- `target: {element: "leg_fl", faces: "all"}` paints every cube in a group in one operation. Use
+  `element: "*"` for the whole model.
+- Give gradients `space: "world"`. Without it, the gradient restarts on every cube and multi-part
+  limbs look banded. Use `stops` for multi-stop gradients.
+- Painting shadows on a separate layer (`layer`) set to `multiply` at 50% opacity makes them easy to
+  adjust later.
+- Use `jagged_edge` for fur silhouettes and `strands` for fur texture.
+- If the texture looks right as an image but wrong on the model, run `inspect_uv` first. To see a
+  single face up close, `get_texture` crops and enlarges that face's UV region.
+- If the model looks washed out or shows a grid, the cause is usually not the texture. Check
+  Blockbench's `brightness` and `pixel_grid` settings.
 
-### Animasyon
+### Animation
 
-- Keyframe değerleri Molang olabilir: `"math.sin(query.anim_time*360)*15"`.
-- Zamanlar animasyonun FPS ızgarasına yuvarlanır (varsayılan 24). Tam değer gerekiyorsa `snap: false`.
-  Zamanlamayı sonradan kaydırmak ya da keyframe silmek için `edit_keyframes`.
-- Kemiğin rest rotasyonu varsa keyframe değerleri bu rotasyonun üstüne eklenir, mutlak açı değildir.
-- Hızlı hareketler için `apply_animation_preset`: float, flap, swing, sway, shake, jump, flicker ve
-  diğerleri.
-- IK kullanan animasyonları Bedrock veya Java'ya aktarmadan önce `bake_ik_animation` ile normal
-  rotasyon keyframe'lerine çevir.
+- Keyframe values can be Molang: `"math.sin(query.anim_time*360)*15"`.
+- Times snap to the animation's FPS grid (default 24). Use `snap: false` when you need the exact value.
+  Use `edit_keyframes` to retime or delete keyframes later.
+- If a bone has a rest rotation, keyframe values are added on top of it; they are not absolute angles.
+- For quick motion, `apply_animation_preset`: float, flap, swing, sway, shake, jump, flicker and more.
+- Before exporting animations that use IK to Bedrock or Java, convert them to plain rotation keyframes
+  with `bake_ik_animation`.
 
 ### Pixel art
 
-`render_pixel_art` modeli küçültülmüş bir ekran görüntüsü olarak değil, pixel art kurallarına göre
-çizer. Ölçek doku pikseline hizalanır, kenar yumuşatma yapılmaz, gölgeler sınırlı sayıda renk bandıyla
-verilir, siluete ve parça birleşimlerine 1 px kontur çekilir.
+`render_pixel_art` doesn't produce a downscaled screenshot; it draws the model by pixel art rules.
+Scale snaps to texture pixels, there is no anti-aliasing, shading uses a limited number of color
+bands, and a 1 px outline is drawn around the silhouette and where parts meet.
 
-- **Açılar:** `side`, `front`, `back`, `top`, `three_quarter`, `top_down`, `isometric` (2:1),
-  `true_isometric`. Serbest açı için `yaw` / `pitch`.
-- **Yönler:** `directions: 8` sekiz yönlü set üretir. Simetrik modellerde `mirror_directions: true`
-  ile render süresi kısalır.
-- **Stil:** `outlined` (varsayılan), `clean`, `minecraft`, `flat`.
-- **Palet:** varsayılan olarak modelin kendi renkleri. `pico8`, `sweetie16`, `endesga32`, `db32` gibi
-  sabit paletler ya da kendi hex listen de verilebilir. İstersen Bayer dither.
-- **Sprite sheet:** `export_pixel_sprites` animasyonları tek bir PNG ve Aseprite uyumlu bir JSON olarak
-  yazar. Ölçek ve pivot bütün kareler için bir kez hesaplanır, böylece kareler arasında kayma olmaz.
+- **Views:** `side`, `front`, `back`, `top`, `three_quarter`, `top_down`, `isometric` (2:1),
+  `true_isometric`. Use `yaw` / `pitch` for a free angle.
+- **Directions:** `directions: 8` produces an eight-direction set. On symmetric models,
+  `mirror_directions: true` cuts render time.
+- **Style:** `outlined` (default), `clean`, `minecraft`, `flat`.
+- **Palette:** the model's own colors by default. Fixed palettes like `pico8`, `sweetie16`,
+  `endesga32`, `db32`, or your own hex list also work. Optional Bayer dithering.
+- **Sprite sheet:** `export_pixel_sprites` writes animations as a single PNG plus an Aseprite-compatible
+  JSON. Scale and pivot are computed once for all frames, so frames don't drift.
 
-Tüm seçenekleri görmek için Claude'dan `pixel_art_presets` çıktısını isteyebilirsin.
+Ask Claude for the `pixel_art_presets` output to see every option.
 
-### Dosya yolları
+### File paths
 
-Kayıt ve export için mutlak yol gerekir. `get_status` ev, masaüstü ve geçici klasörlerin yolunu,
-`get_project_info` her dosya türü için son kullanılan klasörü döndürür. Claude yolu bunlardan öğrenir.
+Saving and exporting need absolute paths. `get_status` returns the home, desktop and temp folders;
+`get_project_info` returns the last-used folder for each file type. Claude builds paths from these.
 
-## Nasıl çalışır
+## How it works
 
 ```
-Claude ──stdio──► MCP sunucusu (mcp-server.js)
+Claude ──stdio──► MCP server (mcp-server.js)
                        │  ws://127.0.0.1:8188
                        ▼
-             Blockbench eklentisi (blockbench_mcp.js)
+             Blockbench plugin (blockbench_mcp.js)
 ```
 
-WebSocket sunucusu MCP tarafında çalışır, eklenti ona bağlanır. Bu yüzden Blockbench tarafında ağ
-izni istenmez. Blockbench kapanırsa sunucu açık kalır. Blockbench yeniden açılınca eklenti birkaç
-saniye içinde kendiliğinden bağlanır.
+The WebSocket server runs on the MCP side and the plugin connects to it, so Blockbench doesn't ask for
+network permissions. If Blockbench closes, the server keeps running. When Blockbench reopens, the
+plugin reconnects on its own within a few seconds.
 
-Pencere arka plandayken tarayıcı motoru zamanlayıcıları yavaşlatır. Eklenti bunu atlatır, böylece uzun
-işlemler Blockbench küçültülmüşken de çalışır.
+Browser engines slow down timers while a window is in the background. The plugin works around this, so
+long operations keep running while Blockbench is minimized.
 
-Port varsayılan olarak 8188'dir. Değiştirmek için hem `BB_BRIDGE_PORT` ortam değişkenini hem de
-Blockbench'teki **Settings → General → MCP Bridge Port** ayarını aynı değere getir.
+The default port is 8188. To change it, set both the `BB_BRIDGE_PORT` environment variable and
+**Settings → General → MCP Bridge Port** in Blockbench to the same value.
 
-## Güvenlik
+## Security
 
-- **Köprü sadece bu bilgisayarda dinler** (`127.0.0.1`). Ağdaki başka cihazlar bağlanamaz.
-- **Web siteleri köprüye bağlanamaz** (1.6.1). Sunucu sadece Origin başlığı olmayan bağlantıları (Node)
-  ve Blockbench penceresini (`file://`) kabul eder, gerisini bağlantı anında reddeder. Bilgisayarında
-  çalışan programlar yine bağlanabilir; bunlar zaten senin yetkilerinle çalıştığı için ek bir risk
-  getirmez.
-- **`eval_code` Blockbench'i kilitleyemez.** İzin penceresi açan Node modülleri (`fs`, `child_process`
-  ve benzerleri) kod çalışmadan önce reddedilir. Gerekirse `allow_native_modules: true` ile açılır, o
-  durumda Blockbench penceresi önde olmalıdır.
-- **Her değişiklik geri alınabilir.** Araçlar Blockbench'in geri alma geçmişine yazar.
-- **Paylaştığın `.bbmodel` dosyasında yerel yollar olabilir.** Blockbench animasyon dosyasının tam
-  yolunu kaydeder. Bu yol, bilgisayarındaki kullanıcı adını içerebilir. Dosyayı paylaşmadan önce
-  kontrol et.
+- **The bridge listens only on this computer** (`127.0.0.1`). Other devices on the network can't
+  connect.
+- **Websites can't connect to the bridge** (1.6.1). The server accepts only connections without an
+  Origin header (Node) and the Blockbench window (`file://`), and refuses everything else during the
+  handshake. Programs running on your computer can still connect; they already run with your
+  permissions, so this adds no extra risk.
+- **`eval_code` can't freeze Blockbench.** Node modules that open a permission dialog (`fs`,
+  `child_process` and similar) are refused before the code runs. `allow_native_modules: true` opts
+  out; the Blockbench window must then be in the foreground.
+- **Every change can be undone.** Tools write to Blockbench's undo history.
+- **A `.bbmodel` file you share may contain local paths.** Blockbench saves the full path of the
+  animation file, which can include your username. Check the file before sharing it.
 
-## Geliştirme
+## Development
 
 ```bash
-npm run build           # eklenti ve sunucu
-npm run build:release   # bağımlılıkları gömülü tek dosyalık sunucu (release için)
+npm run build           # plugin and server
+npm run build:release   # single-file server with bundled dependencies (for releases)
 npm run typecheck
 ```
 
-Eklentiyi değiştirdikten sonra Blockbench'i yeniden başlatmana gerek yok:
+You don't need to restart Blockbench after changing the plugin:
 
 ```bash
 node scripts/call-tool.mjs eval_code '{"code":"setTimeout(() => Plugins.devReload(), 300); \"ok\"","undo":false}'
 ```
 
-Açık bir Claude oturumunun araç listesi sunucu başlarken sabitlenir. Yeni bir aracı oturumu yeniden
-başlatmadan denemek için:
+An open Claude session fixes its tool list when the server starts. To try a new tool without
+restarting the session:
 
 ```bash
 node scripts/call-tool.mjs render_pixel_art '{"view":"isometric","size":64}' --images e2e-output/tmp
 ```
 
-### Testler
+### Tests
 
-| Script | Ne test eder | Gereken |
+| Script | What it tests | Needs |
 |---|---|---|
-| `smoke-test.mjs` | MCP protokolü ve köprü, sahte eklentiyle | Hiçbir şey |
-| `verify-bridge-origin.mjs` | Köprü web sitelerinden gelen bağlantıları reddediyor mu | Hiçbir şey |
-| `e2e-test.mjs` | Tam modelleme senaryosu | Açık Blockbench |
-| `e2e-pro-test.mjs` | Doğrulama, sorgu, ayna, boyama | Açık Blockbench |
-| `verify-paint-ops.mjs` | Boyama işlemleri | Açık Blockbench |
-| `verify-field-fixes.mjs` | 1.3 düzeltmeleri | Açık bir proje |
-| `verify-v52-features.mjs` | Blockbench 5.2 özellikleri | Blockbench 5.2 |
-| `verify-pixel-art.mjs` | Pixel art çıktıları (PNG ve JSON) | Açık Blockbench |
-| `verify-lowpoly-tools.mjs` | Mesh boyama, unwrap, edit/loft/transform, bake, palet, referans, kayıt. Bölüm seçmek için `node scripts/verify-lowpoly-tools.mjs paint,bake` | Açık Blockbench, referans testleri için `REF_DIR` |
-| `verify-hidden-window-timers.mjs` | Pencere arka plandayken zamanlayıcılar | Küçültülmüş Blockbench |
+| `smoke-test.mjs` | MCP protocol and bridge, with a fake plugin | Nothing |
+| `verify-bridge-origin.mjs` | The bridge refuses connections from websites | Nothing |
+| `e2e-test.mjs` | Full modeling scenario | Open Blockbench |
+| `e2e-pro-test.mjs` | Validation, queries, mirroring, painting | Open Blockbench |
+| `verify-paint-ops.mjs` | Paint operations | Open Blockbench |
+| `verify-field-fixes.mjs` | 1.3 fixes | An open project |
+| `verify-v52-features.mjs` | Blockbench 5.2 features | Blockbench 5.2 |
+| `verify-pixel-art.mjs` | Pixel art output (PNG and JSON) | Open Blockbench |
+| `verify-lowpoly-tools.mjs` | Mesh painting, unwrap, edit/loft/transform, bake, palette, reference, recording. Pick sections with `node scripts/verify-lowpoly-tools.mjs paint,bake` | Open Blockbench, `REF_DIR` for the reference tests |
+| `verify-hidden-window-timers.mjs` | Timers while the window is in the background | Minimized Blockbench |
 
-Hepsi `node scripts/<ad>` ile çalışır.
+Run any of them with `node scripts/<name>`.
 
-## Sorun giderme
+## Troubleshooting
 
 - **"Blockbench is not connected"**
-  1. Blockbench açık mı?
-  2. **File → Plugins** altında eklenti yüklü ve etkin mi?
-  3. Port ayarı iki tarafta aynı mı? (Varsayılan 8188.)
-- **Güncelledim ama eski davranış devam ediyor.** Claude oturumunu yeniden başlat. Çalışan sunucu
-  süreci eski dosyayı kullanmaya devam eder.
-- **Uzun işlemler pencere arka plandayken zaman aşımına uğruyor.** `get_status` çıktısında
-  `timers.unthrottled` alanı `true` olmalı. `false` ise Blockbench penceresini öne al.
-- **Loglar**
+  1. Is Blockbench running?
+  2. Is the plugin installed and enabled under **File → Plugins**?
+  3. Is the port the same on both sides? (Default 8188.)
+- **I updated but the old behavior remains.** Restart the Claude session. The running server process
+  keeps using the old file.
+- **Long operations time out while the window is in the background.** `timers.unthrottled` in the
+  `get_status` output should be `true`. If it's `false`, bring the Blockbench window to the front.
+- **Logs**
   - Claude Desktop: `%APPDATA%\Claude\logs\mcp-server-blockbench.log`
-  - Blockbench: `Ctrl+Shift+I` → Console → `[MCP]` satırları
+  - Blockbench: `Ctrl+Shift+I` → Console → `[MCP]` lines
