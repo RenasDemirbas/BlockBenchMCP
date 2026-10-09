@@ -1,11 +1,14 @@
 # Değişiklik günlüğü
 
-## Yayınlanmadı
+## 1.6.1 — Güvenlik düzeltmesi
 
 - Güvenlik: köprü artık tarayıcıdan gelen WebSocket bağlantılarını reddediyor. Önceden Blockbench ve MCP
   açıkken herhangi bir web sitesi `ws://127.0.0.1:8188` üzerinden `eval_code` gönderip bilgisayarda kod
   çalıştırabiliyordu. Yalnızca Origin başlığı olmayan (Node) ve `file://` (Blockbench) bağlantıları kabul
   ediliyor. Test: `scripts/verify-bridge-origin.mjs`.
+- README baştan yazıldı: hazır sürümle kurulum, güncelleme adımları, Blockbench 5.2 özellikleri,
+  güvenlik bölümü, low-poly örnek yapım scripti (`scripts/examples/build-gunslinger.mjs`).
+- `npm run build:release`: bağımlılıkları gömülü, tek dosyalık sunucu. Release dosyaları bununla üretiliyor.
 
 ## 1.6.0 — Low-poly karakter araçları
 
