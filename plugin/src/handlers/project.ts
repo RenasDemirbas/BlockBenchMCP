@@ -178,7 +178,7 @@ register('save_project', (params) => {
   requireProject();
   const path = params.path || Project.save_path;
   if (!path) fail('Project has no save path yet. Pass an absolute "path" ending in .bbmodel.');
-  if (!/\.bbmodel$/i.test(path)) fail('save_project writes the Blockbench project file — path must end in .bbmodel. Use export_model for other formats.');
+  if (!/\.bbmodel$/i.test(path)) fail('project_file "save" writes the Blockbench project file — path must end in .bbmodel. Use action "export" for other formats.');
   const content = Codecs.project.compile();
   Codecs.project.write(content, path);
   return { saved: true, path };
@@ -197,6 +197,6 @@ register('close_project', async (params) => {
   requireProject();
   const name = Project.getDisplayName();
   const closed = await Project.close(params.force === true);
-  if (!closed) fail('Project was not closed — it has unsaved changes. Pass force: true to discard them, or save_project first.');
+  if (!closed) fail('Project was not closed — it has unsaved changes. Pass force: true to discard them, or project_file action "save" first.');
   return { closed: name };
 });

@@ -180,10 +180,10 @@ try {
   const animPath = path.join(outDir, 'mcp_e2e_wolf.animation.json');
   const bbPath = path.join(outDir, 'mcp_e2e_wolf.bbmodel');
   const gltfPath = path.join(outDir, 'mcp_e2e_wolf.gltf');
-  await tool('export_model', { format: 'bedrock_geo', path: geoPath });
-  await tool('export_animations', { path: animPath });
-  await tool('save_project', { path: bbPath });
-  await tool('export_model', { format: 'gltf', path: gltfPath, options: { animations: true } });
+  await tool('project_file', { action: 'export', format: 'bedrock_geo', path: geoPath });
+  await tool('project_file', { action: 'export_animations', path: animPath });
+  await tool('project_file', { action: 'save', path: bbPath });
+  await tool('project_file', { action: 'export', format: 'gltf', path: gltfPath, options: { animations: true } });
 
   for (const [label, file] of [['geo', geoPath], ['anim', animPath], ['bbmodel', bbPath], ['gltf', gltfPath]]) {
     const ok = fs.existsSync(file) && fs.statSync(file).size > 100;

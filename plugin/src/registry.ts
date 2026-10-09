@@ -25,6 +25,6 @@ export function fail(message: string): never {
 
 export function requireProject(): void {
   if (!Project) {
-    fail('No project is open in Blockbench. Use create_project first (or open_project to load an existing file).');
+    fail('No project is open in Blockbench. Use create_project first (or project_file action "open" to load an existing file).');
   }
 }

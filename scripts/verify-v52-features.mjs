@@ -222,15 +222,15 @@ try {
   const lit = await tool('add_cubes', { cubes: [{ name: 'lit', from: [0, 0, 0], to: [16, 16, 16], shade_direction_override: 'up' }] });
   const litEl = await tool('get_element', { id: 'lit' });
   check('shade_direction_override set on a 26.3 cube', lit.ok && litEl.data?.shade_direction_override === 'up', litEl.text.slice(0, 200));
-  const json = await tool('get_model_json', { format: 'java_block' });
+  const json = await tool('project_file', { action: 'get_json', format: 'java_block' });
   check('…and exported in the block model JSON', /shade_direction_override|"shade"/.test(json.data?.content ?? ''), (json.data?.content ?? '').slice(0, 200));
-  const shelf = await tool('set_display_transforms', { slot: 'on_shelf', rotation: [0, 180, 0] });
+  const shelf = await tool('display_transforms', { action: 'set', slot: 'on_shelf', rotation: [0, 180, 0] });
   check('on_shelf display slot accepted', shelf.ok, shelf.text.slice(0, 160));
 
   // ── 8. bedrock_block display defaults ────────────────────────────────────
   console.log('\n8. bedrock_block display defaults');
   await newProject('bedrock_block');
-  const gui = await tool('set_display_transforms', { slot: 'gui', rotation: [30, 45, 0] });
+  const gui = await tool('display_transforms', { action: 'set', slot: 'gui', rotation: [30, 45, 0] });
   check('a new bedrock gui slot starts from the game default scale', gui.ok && near(gui.data?.scale?.[0] ?? 0, 0.625, 1e-3), JSON.stringify(gui.data));
 
   // ── 9. skin templates ────────────────────────────────────────────────────
@@ -243,10 +243,10 @@ try {
   // ── cleanup ──────────────────────────────────────────────────────────────
   for (const uuid of scratch.reverse()) {
     if (!uuid) continue;
-    const sel = await tool('select_project_tab', { uuid });
-    if (sel.ok) await tool('close_project', { force: true });
+    const sel = await tool('project_file', { action: 'switch_tab', uuid });
+    if (sel.ok) await tool('project_file', { action: 'close', force: true });
   }
-  if (originalTab) await tool('select_project_tab', { uuid: originalTab });
+  if (originalTab) await tool('project_file', { action: 'switch_tab', uuid: originalTab });
 
   console.log(`\n${failures.length ? 'FAILED' : 'OK'} — ${passed} passed, ${failures.length} failed`);
   if (failures.length) {

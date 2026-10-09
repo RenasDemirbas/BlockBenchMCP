@@ -114,7 +114,7 @@ try {
     const crop = await tool('get_texture', { element: 'barrel', faces: ['up'] });
     check('get_texture crops to a mesh face', !crop.isError && crop.json?.cropped_to, JSON.stringify(crop.json?.cropped_to)?.slice(0, 160));
 
-    const insp = await tool('inspect_uv', {});
+    const insp = await tool('uv', { action: 'inspect' });
     check('inspect_uv reports meshes + texel density', !insp.isError && insp.json?.mesh_faces > 0 && insp.json?.texel_density, JSON.stringify({ m: insp.json?.mesh_faces, d: insp.json?.texel_density, f: insp.json?.findings?.map((f) => f.type) }));
   }
 
@@ -125,11 +125,11 @@ try {
     await tool('add_mesh_primitive', { shape: 'sphere', sides: 8, diameter: 8, name: 'head', position: [12, 0, 0] });
     await tool('generate_texture_template', { pixel_density: 32, name: 'old_tex' });
     await tool('paint_faces', { targets: [{ element: 'arm', faces: 'all', color: '#2040a0' }, { element: 'arm', faces: ['up'], color: '#ff0000' }, { element: 'head', faces: 'all', color: '#30a030' }] });
-    const before = await tool('inspect_uv', {});
+    const before = await tool('uv', { action: 'inspect' });
     const un = await tool('unwrap_mesh', { pixel_density: 32, density_scale: { head: 2 }, name: 'unwrapped' });
     check('unwrap_mesh runs', !un.isError, un.text.slice(0, 300));
     check('paint transferred', un.json?.transferred_texels > 50, `texels=${un.json?.transferred_texels}`);
-    const after = await tool('inspect_uv', {});
+    const after = await tool('uv', { action: 'inspect' });
     check('no degenerate / overlapping / holed mesh UVs after unwrap', !after.json?.mesh_uv_degenerate && !after.json?.mesh_uv_overlap && !after.json?.transparent_inside_mesh_faces, JSON.stringify(after.json?.findings?.map((f) => f.message.slice(0, 120))));
     const dens = await bb(`(() => { const r = {}; for (const m of Mesh.all) { let pa = 0, wa = 0; const tex = Texture.all.find(t => t.name.startsWith('unwrapped'));
       const fx = tex.width / tex.getUVWidth(); for (const k in m.faces) { const f = m.faces[k]; const vs = f.getSortedVertices(); if (vs.length < 3) continue;
@@ -300,7 +300,7 @@ try {
 } catch (err) {
   check('no exception', false, err.stack || err.message);
 } finally {
-  try { await tool('close_project', { force: true }); } catch {}
+  try { await tool('project_file', { action: 'close', force: true }); } catch {}
   child.kill();
   console.log(failed ? '\nSOME CHECKS FAILED' : '\nALL CHECKS PASSED');
   process.exit(failed ? 1 : 0);

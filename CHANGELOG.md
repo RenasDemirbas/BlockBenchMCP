@@ -1,7 +1,18 @@
 # Changelog
 
-## Unreleased
+## 1.7.0 — Fewer tools
 
+- Fewer tools (82 → 69): rarely used tools are grouped into one tool with an `action` argument, so
+  clients that load every schema up front (Claude Desktop) carry about 9k fewer characters each turn.
+  Renamed tools:
+  - `project_file`: open, save, export, export_animations, import, get_json, switch_tab, close
+    (was `open_project`, `save_project`, `export_model`, `export_animations`, `import_model`,
+    `get_model_json`, `select_project_tab`, `close_project`)
+  - `uv`: inspect, set_cube, set_mesh, auto (was `inspect_uv`, `set_cube_uv`, `set_mesh_uv`, `auto_uv`)
+  - `display_transforms`: get, set (was `get_display_transforms`, `set_display_transforms`)
+  - `pixel_art`: render, export_sheet, presets (was `render_pixel_art`, `export_pixel_sprites`,
+    `pixel_art_presets`); the shared style options are listed once.
+  Each action still checks its own parameters and rejects another action's.
 - README, changelog and release notes translated to English.
 
 ## 1.6.1 — Security fix

@@ -142,8 +142,8 @@ try {
   failed = true;
 } finally {
   try {
-    if (scratchOpen) await tool('close_project', { force: true });
-    if (originalTab) await tool('select_project_tab', { uuid: originalTab });
+    if (scratchOpen) await tool('project_file', { action: 'close', force: true });
+    if (originalTab) await tool('project_file', { action: 'switch_tab', uuid: originalTab });
   } catch (err) {
     console.error('cleanup failed:', err.message);
   }

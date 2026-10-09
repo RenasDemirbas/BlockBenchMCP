@@ -243,7 +243,7 @@ try {
 
   // ── export + cleanup ──
   const geoPath = path.join(outDir, 'mcp_e2e_fox.geo.json');
-  await tool('export_model', { format: 'bedrock_geo', path: geoPath });
+  await tool('project_file', { action: 'export', format: 'bedrock_geo', path: geoPath });
   check('geo export exists', fs.existsSync(geoPath) && fs.statSync(geoPath).size > 500);
   const geo = JSON.parse(fs.readFileSync(geoPath, 'utf8'));
   const bones = geo['minecraft:geometry']?.[0]?.bones || [];
@@ -251,7 +251,7 @@ try {
 
   await tool('undo', { steps: 1 });
   await tool('redo', { steps: 1 });
-  await tool('close_project', { force: true });
+  await tool('project_file', { action: 'close', force: true });
 
   console.log(failed ? '\nPRO E2E TEST FAILED' : '\nPRO E2E TEST PASSED');
 } catch (err) {

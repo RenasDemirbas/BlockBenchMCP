@@ -40,7 +40,7 @@ register('get_model_json', async (params) => {
   const codec = spec.codec();
   let content = codec.compile({ ...(spec.options || {}), ...(params.options || {}) });
   if (content instanceof Promise) content = await content;
-  if (typeof content !== 'string') fail(`Format "${format}" produces binary output — use export_model with a path instead.`);
+  if (typeof content !== 'string') fail(`Format "${format}" produces binary output — use project_file action "export" with a path instead.`);
   const maxLength = params.max_length ?? 60000;
   const truncated = content.length > maxLength;
   return {

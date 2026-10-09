@@ -338,7 +338,7 @@ function faceCropRegion(params: any, explicitTexture: any) {
   const py = Math.max(0, Math.floor(y1 - pad * fy));
   const pw = Math.min(texture.width, Math.ceil(x2 + pad * fx)) - px;
   const ph = Math.min(texture.height, Math.ceil(y2 + pad * fy)) - py;
-  if (pw < 1 || ph < 1) fail(`The matched faces have a zero-size UV rect (${pw}x${ph} px) — nothing to crop. Run generate_texture_template or inspect_uv.`);
+  if (pw < 1 || ph < 1) fail(`The matched faces have a zero-size UV rect (${pw}x${ph} px) — nothing to crop. Run generate_texture_template or uv action "inspect".`);
   return { texture, region: { x: px, y: py, width: pw, height: ph }, faces: rects };
 }
 

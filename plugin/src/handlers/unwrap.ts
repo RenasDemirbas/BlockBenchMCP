@@ -164,6 +164,6 @@ register('unwrap_mesh', async (params) => {
     density_scaled: scaled.length ? scaled : undefined,
     texel_density: densityStats(faces),
     transferred_texels: keepPaint ? transferred : undefined,
-    note: 'Faces now point at the new texture. Check islands with get_texture / inspect_uv; paint with paint_texture targets or bake_texture.',
+    note: 'Faces now point at the new texture. Check islands with get_texture / uv action "inspect"; paint with paint_texture targets or bake_texture.',
   };
 });

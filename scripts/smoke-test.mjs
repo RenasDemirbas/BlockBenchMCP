@@ -103,7 +103,7 @@ try {
   const tools = await rpc('tools/list', {}, 2);
   const names = (tools.result?.tools || []).map((t) => t.name);
   check(`tools/list returns tools (${names.length})`, names.length >= 60);
-  for (const expected of ['create_project', 'add_cubes', 'add_groups', 'set_keyframes', 'paint_texture', 'capture_screenshot', 'export_model', 'eval_code',
+  for (const expected of ['create_project', 'add_cubes', 'add_groups', 'set_keyframes', 'paint_texture', 'capture_screenshot', 'project_file', 'eval_code',
     'validate_model', 'query_geometry', 'mirror_elements', 'mirror_keyframes', 'paint_faces', 'add_planes', 'add_locators']) {
     check(`tool registered: ${expected}`, names.includes(expected));
   }

@@ -1,6 +1,6 @@
 {
   "name": "blockbench-mcp",
-  "version": "1.6.1",
+  "version": "1.7.0",
   "description": "Comprehensive MCP server for Blockbench - modeling, texturing, rigged and group-based animation via Claude",
   "private": true,
   "type": "module",
