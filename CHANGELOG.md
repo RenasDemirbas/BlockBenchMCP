@@ -1,5 +1,12 @@
 # Değişiklik günlüğü
 
+## Yayınlanmadı
+
+- Güvenlik: köprü artık tarayıcıdan gelen WebSocket bağlantılarını reddediyor. Önceden Blockbench ve MCP
+  açıkken herhangi bir web sitesi `ws://127.0.0.1:8188` üzerinden `eval_code` gönderip bilgisayarda kod
+  çalıştırabiliyordu. Yalnızca Origin başlığı olmayan (Node) ve `file://` (Blockbench) bağlantıları kabul
+  ediliyor. Test: `scripts/verify-bridge-origin.mjs`.
+
 ## 1.6.0 — Low-poly karakter araçları
 
 - Mesh boyama: `paint_texture`, `paint_faces` ve `get_texture` artık mesh yüzlerini de hedefliyor. UV

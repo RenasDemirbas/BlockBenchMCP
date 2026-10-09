@@ -203,6 +203,9 @@ WebSocket sunucusu MCP tarafında çalışır, eklenti ona bağlanır. Bu yüzde
 izni istenmez. Blockbench kapanırsa sunucu açık kalır. Blockbench yeniden açılınca eklenti birkaç
 saniye içinde kendiliğinden bağlanır.
 
+Sunucu yalnızca Origin başlığı olmayan (Node) ya da `file://` (Blockbench penceresi) bağlantıları kabul
+eder. Tarayıcıda açık bir web sitesi köprüye bağlanamaz, yani `eval_code` ile kod çalıştıramaz.
+
 Port varsayılan olarak 8188'dir. Değiştirmek için hem `BB_BRIDGE_PORT` ortam değişkenini hem de
 Blockbench'teki **Settings → General → MCP Bridge Port** ayarını aynı değere getir.
 
@@ -231,6 +234,7 @@ node scripts/call-tool.mjs render_pixel_art '{"view":"isometric","size":64}' --i
 | Script | Ne test eder | Gereken |
 |---|---|---|
 | `smoke-test.mjs` | MCP protokolü ve köprü, sahte eklentiyle | Hiçbir şey |
+| `verify-bridge-origin.mjs` | Köprü web sitelerinden gelen bağlantıları reddediyor mu | Hiçbir şey |
 | `e2e-test.mjs` | Tam modelleme senaryosu | Açık Blockbench |
 | `e2e-pro-test.mjs` | Doğrulama, sorgu, ayna, boyama | Açık Blockbench |
 | `verify-paint-ops.mjs` | Boyama işlemleri | Açık Blockbench |
