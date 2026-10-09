@@ -70,12 +70,20 @@ function registerGroup(server: McpServer, name: string, opts: {
 }) {
   const shape: z.ZodRawShape = {};
   const lines: string[] = [];
+  const merge = (key: string, schema: z.ZodTypeAny) => {
+    const prev = shape[key];
+    // Only the first definition of a param reaches the client — a later, different description would be silently lost.
+    if (prev && schema.description && schema.description !== prev.description) {
+      throw new Error(`${name}: param "${key}" is described differently by two actions — share one definition`);
+    }
+    shape[key] ??= schema.isOptional() ? schema : schema.optional();
+  };
   for (const [action, a] of Object.entries(opts.actions)) {
     const params = Object.entries(a.inputSchema ?? {}).map(([key, schema]) => {
-      shape[key] ??= schema.isOptional() ? schema : schema.optional();
+      merge(key, schema);
       return schema.isOptional() ? key : `${key}*`;
     });
-    for (const [key, schema] of Object.entries(a.sharedParams ?? {})) shape[key] ??= schema.isOptional() ? schema : schema.optional();
+    for (const [key, schema] of Object.entries(a.sharedParams ?? {})) merge(key, schema);
     if (a.sharedParams) params.push('+ shared params');
     lines.push(`- "${action}": ${a.description}${params.length ? ` Params: ${params.join(', ')}.` : ''}`);
   }
@@ -1358,6 +1366,17 @@ export function registerTools(server: McpServer) {
     }
   };
 
+  /** Camera and pose params that render and export_sheet both take — one definition so neither description is lost. */
+  const pixelPoseSchema = {
+    view: z.string().optional().describe(`View preset (default "side"): ${pixelViewNames}`),
+    yaw: z.number().optional().describe('Camera azimuth override in degrees (0 = looking at the front, 90 = model faces right, 180 = back, 270 = model faces left)'),
+    pitch: z.number().optional().describe('Camera elevation override in degrees (0 = straight on, 30 = pixel iso / 3/4, 90 = top)'),
+    directions: z.number().optional().describe('Rotation set: 4, 8 or 16 yaws starting at the view\'s yaw. 1 = just the view (default).'),
+    mirror_directions: z.boolean().optional().describe('Render only the right-facing half of the set and mirror the rest (symmetric models only)'),
+    animation: z.string().optional().describe('Animation name/uuid. render: pose the model at "time" (default: rest pose). export_sheet: the animation to sample — omit for a static sprite.'),
+    pose: z.enum(['rest', 'current']).optional().describe('Without "animation" (static sprite): rest = bind pose (default), current = whatever pose the viewport/timeline shows'),
+  };
+
   registerGroup(server, 'pixel_art', {
     title: 'Pixel-art sprites and sprite sheets',
     description: `Render the model as GENUINE pixel art for 2D games — not a downscaled screenshot. Pixel-aligned orthographic frame (1 texel = whole pixels, origin on a pixel corner), no anti-aliasing, mode-filtered supersampling (no blended colours), cel shading with hue-shifted ramps, selective 1 px outline, depth inner lines, palette snapping in Oklab, binary alpha, cleanup. Views: ${pixelViewNames}; or "yaw"/"pitch" (camera azimuth 0 = front, 90 = the model faces right; elevation 0-90). Rotation sets via "directions" (4/8/16 — names: down, down_right, right, up_right, up, up_left, left, down_left = the way the model faces on screen). Frame sizes 16/32/64/128/256. Shared params (render + export_sheet): size … preview_scale — frame size, scale, style preset, shading, outline, inner lines, palette, dither, cleanup.`,
@@ -1369,15 +1388,9 @@ export function registerTools(server: McpServer) {
         description: 'Still sprite(s): one view, several presets via "views", or a rotation set. Returns one contact-strip preview image (zoomed) and, with "directory", writes the true-size PNGs.',
         sharedParams: pixelStyleSchema,
         inputSchema: {
-          view: z.string().optional().describe(`View preset (default "side"): ${pixelViewNames}`),
-          views: z.array(z.string()).optional().describe('Several presets in one call (e.g. ["side", "front", "three_quarter", "isometric"])'),
-          yaw: z.number().optional().describe('Camera azimuth override in degrees (0 = looking at the front, 90 = model faces right, 180 = back, 270 = model faces left)'),
-          pitch: z.number().optional().describe('Camera elevation override in degrees (0 = straight on, 30 = pixel iso / 3/4, 90 = top)'),
-          directions: z.number().optional().describe('Render a rotation set: 4, 8 or 16 yaws starting at the view\'s yaw. 1 = just the view (default).'),
-          mirror_directions: z.boolean().optional().describe('Render only the right-facing half of the set and mirror the rest (symmetric models only)'),
-          animation: z.string().optional().describe('Pose the model with this animation at "time" (default: rest pose)'),
-          time: z.number().optional().describe('Seconds into the animation'),
-          pose: z.enum(['rest', 'current']).optional().describe('Without "animation": rest = bind pose (default), current = whatever pose the viewport/timeline shows'),
+          ...pixelPoseSchema,
+          views: z.array(z.string()).optional().describe('render: several presets in one call (e.g. ["side", "front", "three_quarter", "isometric"])'),
+          time: z.number().optional().describe('render: seconds into "animation"'),
           directory: z.string().optional().describe('Absolute folder to write <name>_<view>.png at true size (created if missing)'),
           name: z.string().optional().describe('File base name (default: project name)'),
           normal_map: z.boolean().optional().describe('Also write <name>_<view>_normal.png (view-space normals) for engines that light sprites'),
@@ -1389,17 +1402,11 @@ export function registerTools(server: McpServer) {
         description: 'Render an animation (or several, or the static model) — optionally as a 4/8-direction set — into a pixel-art SPRITE SHEET with Aseprite-compatible JSON (frames with durations, frameTags per animation/direction, a "pivot" slice at the model origin = feet, plus a "pixelart" block with pixels_per_unit, directions and frame pivots), optional per-frame PNGs and a normal-map sheet. One scale and one pivot for the whole set (bounds are unioned over every pose and direction) so frames never jump. Frames are sampled at "fps" (default 12): a looping 1 s animation gives 12 frames. Rows: one per animation/direction, or a grid via output.columns. Returns a zoomed preview of the sheet.',
         sharedParams: pixelStyleSchema,
         inputSchema: {
-          animation: z.string().optional().describe('Animation name/uuid (omit for a static sprite)'),
-          animations: z.array(z.string()).optional().describe('Several animations in one sheet (each becomes a frame tag / row group)'),
-          fps: z.number().optional().describe('Frames per second to sample (default 12). Sets the frame durations in the JSON.'),
-          frames: z.number().optional().describe('Exact frame count per animation (overrides fps sampling; spread evenly over the length)'),
-          times: z.array(z.number()).optional().describe('Explicit times in seconds (single animation only)'),
-          pose: z.enum(['rest', 'current']).optional().describe('Static export only: rest = bind pose (default), current = the viewport/timeline pose'),
-          view: z.string().optional().describe(`View preset (default "side"): ${pixelViewNames}`),
-          yaw: z.number().optional(),
-          pitch: z.number().optional(),
-          directions: z.number().optional().describe('1 (default), 4, 8 or 16 directions starting at the view\'s yaw'),
-          mirror_directions: z.boolean().optional().describe('Render the right-facing half and mirror the rest (symmetric models only)'),
+          ...pixelPoseSchema,
+          animations: z.array(z.string()).optional().describe('export_sheet: several animations in one sheet (each becomes a frame tag / row group)'),
+          fps: z.number().optional().describe('export_sheet: frames per second to sample (default 12). Sets the frame durations in the JSON.'),
+          frames: z.number().optional().describe('export_sheet: exact frame count per animation (overrides fps sampling; spread evenly over the length)'),
+          times: z.array(z.number()).optional().describe('export_sheet: explicit times in seconds (single animation only)'),
           output: z.object({
             directory: z.string().optional().describe('Absolute folder (created if missing). Without it nothing is written — only the preview comes back.'),
             name: z.string().optional().describe('Base file name (default: <project>_<animation>)'),

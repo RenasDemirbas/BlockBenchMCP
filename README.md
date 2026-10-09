@@ -11,7 +11,7 @@ Every change goes into Blockbench's undo history. Press `Ctrl+Z` to revert any s
 
 | | |
 |---|---|
-| **Version** | 1.7.0 · [Changelog](CHANGELOG.md) |
+| **Version** | 1.7.1 · [Changelog](CHANGELOG.md) |
 | **Blockbench** | 5.2 or later recommended. 5.1.4 also works, but 5.2-only tools return a "requires 5.2" error there. |
 | **Client** | Claude Desktop and Claude Code. Developed on Windows. |
 | **Node.js** | 18 or later |
