@@ -42,9 +42,25 @@ function rejectAllPending(message: string) {
 
 // ─────────────────────────────── hub mode ───────────────────────────────
 
+// Browsers always send Origin and a page cannot fake it. Relay instances and test
+// scripts (Node) send none; the Blockbench window is a file:// page. Any other origin is
+// a website trying to drive Blockbench (eval_code = code execution on this machine).
+function isAllowedOrigin(origin: string | undefined): boolean {
+  return !origin || origin === 'file://';
+}
+
 function startHub(): Promise<boolean> {
   return new Promise((resolve) => {
-    const wss = new WebSocketServer({ host: '127.0.0.1', port: PORT, maxPayload: 64 * 1024 * 1024 });
+    const wss = new WebSocketServer({
+      host: '127.0.0.1',
+      port: PORT,
+      maxPayload: 64 * 1024 * 1024,
+      verifyClient: ({ origin }) => {
+        if (isAllowedOrigin(origin)) return true;
+        console.error(`[bridge] hub: refused connection from origin ${origin}`);
+        return false;
+      },
+    });
     wss.on('listening', () => {
       mode = 'hub';
       console.error(`[bridge] hub: WebSocket server listening on ws://127.0.0.1:${PORT}`);
