@@ -1,6 +1,6 @@
 {
   "name": "blockbench-mcp",
-  "version": "1.6.0",
+  "version": "1.6.1",
   "description": "Comprehensive MCP server for Blockbench - modeling, texturing, rigged and group-based animation via Claude",
   "private": true,
   "type": "module",
@@ -8,6 +8,7 @@
     "build": "npm run build:plugin && npm run build:server",
     "build:plugin": "esbuild plugin/src/index.ts --bundle --format=iife --platform=node --external:electron --outfile=dist/blockbench_mcp.js",
     "build:server": "esbuild server/src/index.ts --bundle --format=esm --platform=node --packages=external --outfile=dist/mcp-server.js",
+    "build:release": "npm run build:plugin && esbuild server/src/index.ts --bundle --format=esm --platform=node --banner:js=\"import { createRequire as __cr } from 'module'; const require = __cr(import.meta.url);\" --outfile=dist/mcp-server.js",
     "typecheck": "tsc --noEmit",
     "install:plugin": "node scripts/install-plugin.mjs"
   },
