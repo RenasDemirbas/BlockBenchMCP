@@ -226,6 +226,7 @@ export function featureSupport(): Record<string, boolean> {
     shade_direction_override: has(() => Cube.properties.shade_direction_override),
     generic_bounding_boxes: has(() => Formats.free?.bounding_boxes),
     gltf_merge_armature: has(() => Codecs.gltf.export_options?.merge_armature),
+    force_translucent_textures: has(() => Texture.properties.force_translucent),
   };
 }
 
@@ -241,6 +242,7 @@ export function describeTexture(tex: any): any {
     path: tex.path || undefined,
     particle: !!tex.particle,
     render_mode: tex.render_mode,
+    force_translucent: tex.force_translucent || undefined,
     pbr_channel: tex.pbr_channel !== 'color' ? tex.pbr_channel : undefined,
     group: tex.group || undefined,
     // Painting lands on ONE layer of a layered texture — worth knowing up front.

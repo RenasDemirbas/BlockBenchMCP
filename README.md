@@ -11,7 +11,7 @@ Every change goes into Blockbench's undo history. Press `Ctrl+Z` to revert any s
 
 | | |
 |---|---|
-| **Version** | 1.7.1 · [Changelog](CHANGELOG.md) |
+| **Version** | 1.8.0 · [Changelog](CHANGELOG.md) |
 | **Blockbench** | 5.2 or later recommended. 5.1.4 also works, but 5.2-only tools return a "requires 5.2" error there. |
 | **Client** | Claude Desktop and Claude Code. Developed on Windows. |
 | **Node.js** | 18 or later |
@@ -265,6 +265,47 @@ long operations keep running while Blockbench is minimized.
 The default port is 8188. To change it, set both the `BB_BRIDGE_PORT` environment variable and
 **Settings → General → MCP Bridge Port** in Blockbench to the same value.
 
+## Adding tools from another plugin
+
+Another Blockbench plugin can add its own tools. Claude sees them next to the built-in ones as soon as
+they are registered, with no server restart. Register through `window.BlockbenchMCP` and listen for
+`blockbench_mcp_ready`. The event covers a plugin that loads before this one, and re-adds the tool
+when the bridge plugin reloads.
+
+```js
+let tool;
+function addTools() {
+  tool = BlockbenchMCP.registerTool({
+    name: 'count_cubes',
+    title: 'Count cubes',
+    description: 'Count the cubes in the open project, optionally only those whose name contains a filter.',
+    inputSchema: { type: 'object', properties: { filter: { type: 'string' } } }, // JSON Schema
+    annotations: { readOnlyHint: true },
+  }, ({ filter }) => ({ count: Cube.all.filter((c) => !filter || c.name.includes(filter)).length }));
+}
+
+Plugin.register('my_plugin', {
+  onload() {
+    if (window.BlockbenchMCP) addTools();
+    window.addEventListener('blockbench_mcp_ready', addTools);
+  },
+  onunload() {
+    tool?.delete();
+    window.removeEventListener('blockbench_mcp_ready', addTools);
+  },
+});
+```
+
+- `name`: 1–64 characters of `A-Z a-z 0-9 _ - .`. A name a built-in or another plugin already uses
+  is refused.
+- `description` is required. It is all Claude reads to decide when to call the tool.
+- `inputSchema` is optional and must have `type: "object"`. The server does not check arguments
+  against it; the handler should.
+- The handler may be `async`. A returned string is sent as text, anything else as JSON. To send
+  images, put a PNG data URL in `__image` (or an array of them in `__images`) on the returned object.
+  A thrown error comes back as the tool's error message. Calls time out after 120 seconds.
+- `registerTool` returns an object with `delete()`, which removes the tool again.
+
 ## Security
 
 - **The bridge listens only on this computer** (`127.0.0.1`). Other devices on the network can't
@@ -307,6 +348,7 @@ node scripts/call-tool.mjs pixel_art '{"action":"render","view":"isometric","siz
 |---|---|---|
 | `smoke-test.mjs` | MCP protocol and bridge, with a fake plugin | Nothing |
 | `verify-bridge-origin.mjs` | The bridge refuses connections from websites | Nothing |
+| `verify-plugin-api.mjs` | Tools added by other plugins: listing, calls, relay instances, removal, re-adding after a reload. Moves the plugin to port 8191 during the test and back afterwards | Open Blockbench |
 | `e2e-test.mjs` | Full modeling scenario | Open Blockbench |
 | `e2e-pro-test.mjs` | Validation, queries, mirroring, painting | Open Blockbench |
 | `verify-paint-ops.mjs` | Paint operations | Open Blockbench |

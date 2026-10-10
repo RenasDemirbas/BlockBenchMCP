@@ -22,6 +22,26 @@ let pluginInfo: { blockbench_version?: string; plugin_version?: string } = {};
 const pending = new Map<string, Pending>(); // this instance's own in-flight calls
 const relayRoutes = new Map<string, WebSocket>(); // hub: relayed request id -> client socket
 
+// Tools other Blockbench plugins registered (plugin/src/registry.ts ExternalTool).
+export type ExternalTool = { name: string; title?: string; description: string; inputSchema: Record<string, any>; annotations?: Record<string, any> };
+let externalTools: ExternalTool[] = [];
+const pluginTools = new Map<WebSocket, unknown>(); // hub: each Blockbench window's list
+let externalToolsListener: (tools: ExternalTool[]) => void = () => {};
+
+export function onExternalTools(fn: (tools: ExternalTool[]) => void) {
+  externalToolsListener = fn;
+  fn(externalTools);
+}
+
+function setExternalTools(tools: unknown) {
+  externalTools = Array.isArray(tools) ? tools : [];
+  externalToolsListener(externalTools);
+  const msg = JSON.stringify({ event: 'tools', tools: externalTools });
+  for (const client of clients) {
+    if (client.readyState === WebSocket.OPEN) client.send(msg);
+  }
+}
+
 function activePlugin(): WebSocket | null {
   for (let i = plugins.length - 1; i >= 0; i--) {
     if (plugins[i].readyState === WebSocket.OPEN) return plugins[i];
@@ -84,10 +104,18 @@ function startHub(): Promise<boolean> {
           if (!plugins.includes(socket)) plugins.push(socket);
           pluginInfo = { blockbench_version: msg.blockbench_version, plugin_version: msg.plugin_version };
           console.error(`[bridge] hub: Blockbench ${msg.blockbench_version} connected (plugin ${msg.plugin_version})`);
+          pluginTools.set(socket, msg.tools);
+          setExternalTools(pluginTools.get(activePlugin()!));
+          return;
+        }
+        if (msg.event === 'tools' && plugins.includes(socket)) {
+          pluginTools.set(socket, msg.tools);
+          setExternalTools(pluginTools.get(activePlugin()!));
           return;
         }
         if (msg.event === 'client-hello') {
           clients.add(socket);
+          socket.send(JSON.stringify({ event: 'tools', tools: externalTools }));
           console.error('[bridge] hub: relay client connected (another MCP instance)');
           return;
         }
@@ -123,6 +151,8 @@ function startHub(): Promise<boolean> {
         const idx = plugins.indexOf(socket);
         if (idx >= 0) {
           plugins.splice(idx, 1);
+          pluginTools.delete(socket);
+          setExternalTools(pluginTools.get(activePlugin()!));
           console.error('[bridge] hub: Blockbench window disconnected');
           if (!activePlugin()) {
             rejectAllPending('Blockbench disconnected while the command was running.');
@@ -162,6 +192,10 @@ function startClient(): Promise<boolean> {
     socket.on('message', (raw) => {
       let msg: any;
       try { msg = JSON.parse(raw.toString()); } catch { return; }
+      if (msg.event === 'tools') {
+        setExternalTools(msg.tools);
+        return;
+      }
       const entry = pending.get(msg.id);
       if (entry) {
         pending.delete(msg.id);

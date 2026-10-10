@@ -120,8 +120,14 @@ async function awaitTextureSettle(texture: any, timeoutMs = 3000, stableMs = 400
   }
 }
 
+// Java block/item models export it as {"sprite", "force_translucent": true} (Blockbench 5.2.2+).
+function requireForceTranslucent(params: any) {
+  if (params.force_translucent && !Texture.properties.force_translucent) fail(`force_translucent needs Blockbench 5.2.2 or newer (this is ${Blockbench.version}).`);
+}
+
 register('create_texture', async (params) => {
   requireProject();
+  requireForceTranslucent(params);
   const width = clampInt(params.width ?? Project.texture_width ?? 16, 1, 4096);
   const height = clampInt(params.height ?? Project.texture_height ?? 16, 1, 4096);
   const name = params.name || 'texture';
@@ -149,6 +155,7 @@ register('create_texture', async (params) => {
   }).fromDataURL(dataUrl);
   if (params.pbr_channel) texture.pbr_channel = params.pbr_channel;
   if (params.render_mode) texture.render_mode = params.render_mode;
+  if (params.force_translucent) texture.force_translucent = true;
   texture.add(false);
   if (params.particle) texture.enableParticle();
   texture.select();
@@ -404,8 +411,10 @@ register('get_texture', (params) => {
 register('import_texture', async (params) => {
   requireProject();
   if (!params.path) fail('Missing absolute "path" to an image file (png/jpeg/webp/tga).');
+  requireForceTranslucent(params);
   Undo.initEdit({ textures: [], selected_texture: true });
   const texture = new Texture({ name: PathModule.basename(params.path) }).fromPath(params.path);
+  if (params.force_translucent) texture.force_translucent = true;
   texture.add(false, true);
   Undo.finishEdit('MCP: Import texture', { textures: [texture], selected_texture: true, bitmap: true });
   await awaitTextureLoad(texture);

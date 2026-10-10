@@ -2,11 +2,12 @@
 // the WS bridge; schemas are kept flat (no top-level unions) for maximum
 // client compatibility.
 import { z } from 'zod';
+import { z as z4 } from 'zod/v4';
 import { mkdirSync } from 'node:fs';
 import { isAbsolute } from 'node:path';
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import type { McpServer, RegisteredTool } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { forward, toToolResult, errorResult, type ToolResult } from './respond';
-import { call, isConnected, getPluginInfo } from './bridge';
+import { call, isConnected, getPluginInfo, type ExternalTool } from './bridge';
 
 const vec3 = () => z.array(z.number()).length(3);
 const vec2 = () => z.array(z.number()).length(2);
@@ -650,6 +651,7 @@ export function registerTools(server: McpServer) {
       pbr_channel: z.enum(['color', 'normal', 'height', 'mer']).optional(),
       render_mode: z.enum(['default', 'emissive', 'additive', 'layered']).optional(),
       particle: z.boolean().optional().describe('Use as particle texture (bedrock)'),
+      force_translucent: z.boolean().optional().describe('Java block/item: export as translucent ({"sprite", "force_translucent": true} in the model JSON). Blockbench 5.2.2+'),
       apply_to_all: z.boolean().optional().describe('Apply to all elements after creating'),
     },
     annotations: mutating,
@@ -725,7 +727,10 @@ export function registerTools(server: McpServer) {
   server.registerTool('import_texture', {
     title: 'Import texture file',
     description: 'Import an image file from disk as a texture.',
-    inputSchema: { path: z.string().describe('Absolute path to png/jpeg/webp/tga') },
+    inputSchema: {
+      path: z.string().describe('Absolute path to png/jpeg/webp/tga'),
+      force_translucent: z.boolean().optional().describe('Java block/item: export as translucent ({"sprite", "force_translucent": true} in the model JSON). Blockbench 5.2.2+'),
+    },
     annotations: mutating,
   }, forward('import_texture'));
 
@@ -1469,4 +1474,37 @@ export function registerTools(server: McpServer) {
     inputSchema: { steps: z.number().optional() },
     annotations: mutating,
   }, forward('redo'));
+}
+
+// ───────────────────────────── tools from other plugins ─────────────────────────────
+
+const externalTools = new Map<string, { tool: RegisteredTool; json: string }>();
+
+/** Mirror the tools other Blockbench plugins registered (window.BlockbenchMCP.registerTool). */
+export function syncExternalTools(server: McpServer, tools: ExternalTool[]) {
+  const next = new Map(tools.map((t) => [t.name, JSON.stringify(t)]));
+  for (const [name, entry] of externalTools) {
+    if (next.get(name) !== entry.json) {
+      entry.tool.remove();
+      externalTools.delete(name);
+    }
+  }
+  for (const t of tools) {
+    if (externalTools.has(t.name)) continue;
+    // The SDK only takes Zod. The plugin's JSON Schema rides along as metadata, which the SDK's
+    // JSON Schema export copies into tools/list; the plugin checks the arguments itself.
+    // "id" is dropped because Zod treats it as a registry key and throws on duplicates.
+    const { id: _id, ...jsonSchema } = t.inputSchema;
+    try {
+      const tool = server.registerTool(t.name, {
+        title: t.title,
+        description: t.description,
+        inputSchema: z4.object({}).loose().meta(jsonSchema),
+        annotations: t.annotations,
+      }, forward(t.name, 120_000));
+      externalTools.set(t.name, { tool, json: next.get(t.name)! });
+    } catch (err) {
+      console.error(`[mcp] skipped plugin tool "${t.name}": ${(err as Error).message}`);
+    }
+  }
 }
