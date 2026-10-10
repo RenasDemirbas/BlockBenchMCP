@@ -23,8 +23,8 @@ import './handlers/scene';
 import './handlers/io';
 import './handlers/pixelart';
 import './handlers/misc';
-import { connect, shutdown, restart, connectionState } from './socket';
-import { listCommands } from './registry';
+import { connect, shutdown, restart, connectionState, PLUGIN_VERSION } from './socket';
+import { listCommands, registerExternalTool } from './registry';
 
 const deletables: any[] = [];
 function reg<T>(item: T): T {
@@ -37,7 +37,7 @@ Plugin.register('blockbench_mcp', {
   author: 'BlockBenchMCP',
   description: 'Lets AI assistants control Blockbench through the Model Context Protocol: modeling, texturing, UV, rigged & group animations, rendering, pixel-art sprite export and model export.',
   icon: 'hub',
-  version: '1.7.1',
+  version: '1.8.0',
   variant: 'desktop',
   min_version: '5.0.0',
   tags: ['Interface', 'MCP'],
@@ -87,9 +87,15 @@ Plugin.register('blockbench_mcp', {
     }));
     MenuBar.addAction(action, 'tools');
 
+    // Public API for other plugins. The event lets a plugin that loaded first (or
+    // registered before this plugin was reloaded) add its tools again.
+    (window as any).BlockbenchMCP = { version: PLUGIN_VERSION, registerTool: registerExternalTool };
+    window.dispatchEvent(new CustomEvent('blockbench_mcp_ready'));
+
     connect();
   },
   onunload() {
+    delete (window as any).BlockbenchMCP;
     shutdown();
     uninstallUnthrottledTimers();
     stopRecording();

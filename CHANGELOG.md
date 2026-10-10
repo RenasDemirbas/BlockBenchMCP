@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.8.0 — Tools from other plugins
+
+- Other Blockbench plugins can add MCP tools with `window.BlockbenchMCP.registerTool(definition, handler)`.
+  The tools appear in Claude's tool list as soon as they are registered, also on relay instances,
+  and disappear on `delete()` or when Blockbench closes. A `blockbench_mcp_ready` event lets a plugin
+  that loaded first, or survived a reload of the bridge plugin, add its tools again. See
+  [Adding tools from another plugin](README.md#adding-tools-from-another-plugin).
+- New test: `scripts/verify-plugin-api.mjs`.
+- Errors thrown by a tool handler no longer carry a stack trace to the model; the Blockbench console
+  still logs it.
+- `create_texture` / `import_texture`: `force_translucent` (Java block/item, Blockbench 5.2.2+) exports
+  the texture as `{"sprite", "force_translucent": true}`. Textures report it, and `get_status`
+  features gain `force_translucent_textures`.
+
 ## 1.7.1 — Pixel-art parameter descriptions
 
 - `pixel_art`: `animation`, `pose`, `directions` and `mirror_directions` are shared by `render` and

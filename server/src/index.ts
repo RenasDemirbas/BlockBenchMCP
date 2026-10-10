@@ -3,12 +3,12 @@
 // stdout is reserved for JSON-RPC; log to stderr only.
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import { startBridge } from './bridge';
-import { registerTools } from './tools';
+import { startBridge, onExternalTools } from './bridge';
+import { registerTools, syncExternalTools } from './tools';
 
 const server = new McpServer({
   name: 'blockbench',
-  version: '1.7.1',
+  version: '1.8.0',
 }, {
   instructions: [
     'Blockbench modeling conventions (Minecraft-style):',
@@ -30,6 +30,7 @@ const server = new McpServer({
 });
 
 registerTools(server);
+onExternalTools((tools) => syncExternalTools(server, tools));
 
 async function main() {
   await startBridge();

@@ -1,8 +1,8 @@
 // WebSocket bridge client: dials out to the MCP server (which hosts the WS
 // server). Outbound browser WebSocket needs no Blockbench permissions.
-import { getHandler, CommandError } from './registry';
+import { getHandler, CommandError, listExternalTools, onExternalToolsChange } from './registry';
 
-export const PLUGIN_VERSION = '1.7.1';
+export const PLUGIN_VERSION = '1.8.0';
 
 let ws: WebSocket | null = null;
 let reconnectTimer: any = null;
@@ -40,7 +40,8 @@ async function handleMessage(raw: string) {
   } catch (err: any) {
     const message = err instanceof CommandError
       ? err.message
-      : `Blockbench error in ${msg.command}: ${err?.message || err}\n${(err?.stack || '').split('\n').slice(1, 4).join('\n')}`;
+      // No stack: its frames point into the bundle, useless to the model. The console keeps it.
+      : `Blockbench error in ${msg.command}: ${err?.message || err}`;
     console.error('[MCP]', err);
     send({ id: msg.id, ok: false, error: message });
   }
@@ -61,6 +62,7 @@ export function connect() {
       event: 'hello',
       blockbench_version: Blockbench.version,
       plugin_version: PLUGIN_VERSION,
+      tools: listExternalTools(),
     }));
   };
   ws.onmessage = (event) => {
@@ -74,6 +76,10 @@ export function connect() {
   };
   ws.onerror = () => { /* onclose fires next */ };
 }
+
+onExternalToolsChange(() => {
+  if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ event: 'tools', tools: listExternalTools() }));
+});
 
 function scheduleReconnect() {
   if (stopped) return;
