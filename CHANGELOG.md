@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- The source is split into smaller modules (the 1500-line tool file, painting, outliner edits). Tools
+  behave the same; their schemas are unchanged.
 - `add_cubes`, `add_groups`, `add_meshes`, `add_planes`, `add_locators`, `add_bounding_boxes`,
   `add_ik_controllers`, `duplicate_elements` and `mirror_elements` (duplicate): when a batch fails
   partway, nothing it created is left behind. Before, the new nodes survived the rollback and fell out

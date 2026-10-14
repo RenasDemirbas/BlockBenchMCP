@@ -264,3 +264,24 @@ export function segDist(p: P2, a: P2, b: P2): number {
   t = Math.max(0, Math.min(1, t));
   return Math.hypot(p[0] - (a[0] + t * dx), p[1] - (a[1] + t * dy));
 }
+
+/**
+ * Face keys a target selects on one element. Cube direction names also work
+ * on meshes: they pick the faces whose world normal points mostly that way.
+ */
+export function targetFaceKeys(el: any, faces: string[] | 'all'): string[] {
+  if (el instanceof Cube) return faces === 'all' ? FACE_KEYS.slice() : faces.filter((k) => FACE_KEYS.includes(k));
+  const all = Object.keys(el.faces);
+  if (faces === 'all') return all;
+  const direct = faces.filter((k) => el.faces[k]);
+  const dirs = faces.filter((k) => FACE_KEYS.includes(k));
+  if (!dirs.length) return direct;
+  const byDir = new Set(direct);
+  for (const f of surfaceFaces([el])) {
+    const [x, y, z] = f.normal;
+    const ax = Math.abs(x), ay = Math.abs(y), az = Math.abs(z);
+    const dir = ay >= ax && ay >= az ? (y > 0 ? 'up' : 'down') : ax >= az ? (x > 0 ? 'east' : 'west') : (z > 0 ? 'south' : 'north');
+    if (dirs.includes(dir)) byDir.add(f.key);
+  }
+  return [...byDir];
+}
