@@ -662,7 +662,7 @@ export function registerTools(server: McpServer) {
     description: 'Auto-generate a texture with all element UVs laid out (like Blockbench "Create Template"). Re-arranges element UVs onto the new texture — do this AFTER modeling, BEFORE painting. Then use paint_texture with face targets.',
     inputSchema: {
       name: z.string().optional(),
-      pixel_density: z.number().optional().describe('Texture pixels per model unit x16. 16 = 1px per unit (default), 32 = 2px per unit'),
+      pixel_density: z.number().optional().describe('Texture pixels per model unit x16, 1-512. 16 = 1px per unit (default), 32 = 2px per unit'),
       elements: z.array(z.string()).optional().describe('Limit to these elements (default: all)'),
       rearrange_uv: z.boolean().optional().describe('default true'),
       power_of_two: z.boolean().optional().describe('Round texture size up to power of two (default true)'),
@@ -761,7 +761,7 @@ export function registerTools(server: McpServer) {
         radius: z.union([z.number(), vec2()]).optional(),
         pixels: z.array(vec2()).optional(),
         thickness: z.number().optional(),
-        filled: z.boolean().optional(),
+        filled: z.boolean().optional().describe('rect/ellipse: false = outline. Default: filled, or outline when only "thickness" is given'),
         tolerance: z.number().optional().describe('fill: 0-100 color distance'),
         clip: z.object({ from: vec2(), to: vec2() }).optional(),
         stops: z.array(z.object({
@@ -882,7 +882,7 @@ export function registerTools(server: McpServer) {
     description: 'UV-unwrap cubes and meshes onto a NEW packed texture, the way a low-poly character is prepared for hand painting. Unlike generate_texture_template, connected mesh faces are joined into islands (a limb becomes one strip instead of dozens of loose faces), so painting runs continuously across them.\n- seams: cut ("divide") or force-join ("join") specific mesh edges before unwrapping — e.g. cut a sleeve along its inner side. "auto" clears a seam.\n- seam_angle / island_angle: faces only join across edges flatter than seam_angle, and an island stops growing once it bends more than island_angle in total (defaults 36 / 45).\n- density_scale: more or fewer texels for chosen parts, e.g. {"head": 2, "boots": 0.5} — give the face and torso extra detail.\n- keep_paint (default true): texels already painted on the old UVs are copied to the new layout face by face, so you can re-unwrap after modeling changes without losing paint.\nReports texel density (texture px per model unit) min/median/max. Then paint with paint_texture/paint_faces targets or bake_texture.',
     inputSchema: {
       elements: z.array(z.string()).optional().describe('Cubes/meshes/groups to unwrap (default: the whole model)'),
-      pixel_density: z.number().optional().describe('Template resolution: 16 = 1 texture px per model unit, 32 = 2 px, 64 = 4 px (default 16). Low-poly painted characters usually want 32-64.'),
+      pixel_density: z.number().optional().describe('Template resolution, 1-512: 16 = 1 texture px per model unit, 32 = 2 px, 64 = 4 px (default 16). Low-poly painted characters usually want 32-64.'),
       density_scale: z.record(z.string(), z.number()).optional().describe('Per element/group multiplier on the density, e.g. {"head": 2}'),
       seams: z.array(z.object({
         mesh: z.string().describe('Mesh name/uuid'),

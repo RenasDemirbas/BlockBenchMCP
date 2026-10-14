@@ -63,9 +63,28 @@ export function collectCubes(id: string, context: string): any[] {
 }
 
 export function resolveGroup(id: string): any {
+  // Only groups can be parents, so a cube sharing the group's name must not make the name ambiguous.
+  if (id && !OutlinerNode.uuids[id]) {
+    const lower = String(id).toLowerCase();
+    const groups = Project.groups.filter((g: any) => g.name.toLowerCase() === lower);
+    if (groups.length === 1) return groups[0];
+    if (groups.length > 1) fail(`Multiple groups are named "${id}" (${groups.map((g: any) => g.uuid).join(', ')}). Use the uuid instead — see list_outline.`);
+  }
   const node = resolveNode(id);
   if (node instanceof Group) return node;
   fail(`Node "${id}" is a ${node.type}, not a group/bone. Use list_outline to find groups.`);
+}
+
+/**
+ * Roll back an edit that created nodes. Undo.cancelEdit only removes nodes the edit was opened with, and
+ * creating edits open with an empty list — the new nodes would survive, dropped unparented at the root.
+ */
+export function cancelCreate(created: any[]) {
+  for (const n of [...created].reverse()) {
+    if (!OutlinerNode.uuids[n.uuid]) continue; // already gone with a removed parent group
+    if (n instanceof Group) n.remove(false); else n.remove();
+  }
+  Undo.cancelEdit(true);
 }
 
 export function resolveParent(id: string | undefined | null): any {

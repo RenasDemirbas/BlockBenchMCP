@@ -1,9 +1,9 @@
 // unwrap_mesh: UV-unwrap cubes and meshes into packed islands, with seam
 // control, per-part texel density and transfer of already painted texels.
 import { register, fail, requireProject } from '../registry';
-import { clampInt, describeTexture } from '../util';
+import { describeTexture } from '../util';
 import { collectSurfaceElements, surfaceFaces, forEachTexel, worldArea, pixelArea, SurfaceFace } from '../surface';
-import { runTextureTemplate } from './textures';
+import { runTextureTemplate, pixelDensityParam } from './textures';
 import { paintTarget, commitBitmap } from './layers';
 
 /** Texel density stats (texture px per model unit) over a set of faces. */
@@ -22,7 +22,7 @@ register('unwrap_mesh', async (params) => {
   requireProject();
   const ids: string[] = Array.isArray(params.elements) && params.elements.length ? params.elements : ['*'];
   const elements = [...new Set(ids.flatMap((id) => collectSurfaceElements(id, 'unwrap_mesh')))];
-  const pixelDensity = clampInt(params.pixel_density ?? 16, 1, 128);
+  const pixelDensity = pixelDensityParam(params.pixel_density);
 
   // ── 1. Seams (their own undo step — the template's undo only covers UVs) ──
   const seamLog: string[] = [];

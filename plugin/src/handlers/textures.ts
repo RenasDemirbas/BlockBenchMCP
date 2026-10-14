@@ -186,6 +186,18 @@ register('create_texture', async (params) => {
   return out;
 });
 
+/** rect/ellipse draw an outline when asked (filled: false) or when only a line thickness is given. */
+export function isOutline(op: any): boolean {
+  return op.filled === false || (op.filled == null && op.thickness != null);
+}
+
+/** Template resolution (16 = 1 texture px per model unit). Out of range fails instead of being clamped silently. */
+export function pixelDensityParam(value: any): number {
+  const d = Number(value ?? 16);
+  if (!Number.isFinite(d) || d < 1 || d > 512) fail(`pixel_density must be 1-512 (16 = 1 texture px per model unit, 256 = 16 px); got ${value}.`);
+  return Math.round(d);
+}
+
 /**
  * Run Blockbench's template generator on the currently selected elements and
  * resolve with the new texture once it has settled.
@@ -245,7 +257,7 @@ register('generate_texture_template', async (params) => {
     targets.forEach((el: any) => el.markAsSelected?.());
     updateSelection();
   }
-  const pixelDensity = clampInt(params.pixel_density ?? 16, 1, 128);
+  const pixelDensity = pixelDensityParam(params.pixel_density);
   const texture: any = await runTextureTemplate({
     name: params.name || `${Project.name || 'model'}_texture`,
     pixelDensity,
@@ -666,7 +678,7 @@ register('paint_texture', (params) => {
         const x = Math.min(x0, x1), y = Math.min(y0, y1);
         const w = Math.abs(x1 - x0) + (op.target ? 0 : 1);
         const h = Math.abs(y1 - y0) + (op.target ? 0 : 1);
-        if (op.filled === false) {
+        if (isOutline(op)) {
           const t = Math.max(1, Math.round(op.thickness ?? 1));
           ctx.fillRect(x, y, w, t);
           ctx.fillRect(x, y + h - t, w, t);
@@ -683,7 +695,7 @@ register('paint_texture', (params) => {
           for (let x = Math.floor(cx - rx); x <= Math.ceil(cx + rx); x++) {
             const nx = (x + 0.5 - cx) / rx, ny = (y + 0.5 - cy) / ry;
             const d = nx * nx + ny * ny;
-            if (op.filled === false) {
+            if (isOutline(op)) {
               const nx2 = (x + 0.5 - cx) / (rx - 1 || 0.5), ny2 = (y + 0.5 - cy) / (ry - 1 || 0.5);
               if (d <= 1 && nx2 * nx2 + ny2 * ny2 > 1) ctx.fillRect(x, y, 1, 1);
             } else if (d <= 1) {

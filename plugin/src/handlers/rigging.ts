@@ -1,7 +1,7 @@
 // Inverse kinematics: null-object IK controllers with (5.2+) pole targets,
 // and baking the solved IK into plain rotation keyframes for export.
 import { register, fail, requireProject } from '../registry';
-import { resolveNode, resolveParent, resolveAnimation, vec3, refreshElements } from '../util';
+import { resolveNode, resolveParent, resolveAnimation, vec3, refreshElements, cancelCreate } from '../util';
 import { applyIkFields } from './elements';
 
 function requireIkSupport() {
@@ -113,7 +113,7 @@ register('add_ik_controllers', (params) => {
       report.push(entry);
     }
   } catch (err) {
-    Undo.cancelEdit(true);
+    cancelCreate(created);
     throw err;
   }
   refreshElements(created);

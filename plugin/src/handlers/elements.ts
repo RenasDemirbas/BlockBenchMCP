@@ -1,7 +1,7 @@
 // Outliner: groups (bones), cubes, meshes, primitives, planes (fur cards),
 // locators, hierarchy edits.
 import { register, fail, requireProject } from '../registry';
-import { resolveNode, resolveGroup, resolveParent, resolveTexture, vec3, describeNode, refreshElements, hash01 } from '../util';
+import { resolveNode, resolveGroup, resolveParent, resolveTexture, vec3, describeNode, refreshElements, hash01, cancelCreate } from '../util';
 import { mirrorName, mirrorNodeInPlace, defaultMirrorCenter } from './symmetry';
 
 function applyFaceData(cube: any, facesParam: any) {
@@ -88,7 +88,7 @@ register('add_groups', (params) => {
       created.push(group);
     }
   } catch (err) {
-    Undo.cancelEdit(true);
+    cancelCreate(created);
     throw err;
   }
   Canvas.updateAllBones(created);
@@ -155,7 +155,7 @@ register('add_cubes', (params) => {
       }
     }
   } catch (err) {
-    Undo.cancelEdit(true);
+    cancelCreate(created);
     throw err;
   }
   refreshElements(created);
@@ -204,7 +204,7 @@ register('add_meshes', (params) => {
       created.push(mesh);
     }
   } catch (err) {
-    Undo.cancelEdit(true);
+    cancelCreate(created);
     throw err;
   }
   refreshElements(created);
@@ -503,7 +503,7 @@ register('duplicate_elements', (params) => {
       clones.push(clone);
     }
   } catch (err) {
-    Undo.cancelEdit(true);
+    cancelCreate(clones);
     throw err;
   }
   const flat: any[] = [];
@@ -619,7 +619,7 @@ register('add_planes', (params) => {
       created.push(cube);
     }
   } catch (err) {
-    Undo.cancelEdit(true);
+    cancelCreate(created);
     throw err;
   }
   refreshElements(created);
@@ -653,7 +653,7 @@ register('add_locators', (params) => {
       created.push(locator);
     }
   } catch (err) {
-    Undo.cancelEdit(true);
+    cancelCreate(created);
     throw err;
   }
   refreshElements(created);
@@ -684,7 +684,7 @@ register('add_bounding_boxes', (params) => {
       created.push(box);
     }
   } catch (err) {
-    Undo.cancelEdit(true);
+    cancelCreate(created);
     throw err;
   }
   refreshElements(created, { transform: true, geometry: true });

@@ -1,7 +1,7 @@
 // Symmetry tools: mirror elements across a plane, mirror keyframes between
 // left/right bones (with phase offset for walk cycles), left/right renaming.
 import { register, fail, requireProject } from '../registry';
-import { resolveAnimation, resolveNode, refreshElements, vec3 } from '../util';
+import { resolveAnimation, resolveNode, refreshElements, vec3, cancelCreate } from '../util';
 
 export const AXIS_INDEX: Record<string, number> = { x: 0, y: 1, z: 2 };
 
@@ -174,7 +174,7 @@ register('mirror_elements', (params) => {
       produced.push(target);
     }
   } catch (err) {
-    Undo.cancelEdit(true);
+    cancelCreate(duplicate ? produced : []);
     throw err;
   }
   const flat: any[] = [];
