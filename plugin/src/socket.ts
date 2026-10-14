@@ -2,7 +2,7 @@
 // server). Outbound browser WebSocket needs no Blockbench permissions.
 import { getHandler, CommandError, listExternalTools, onExternalToolsChange } from './registry';
 
-export const PLUGIN_VERSION = '1.8.0';
+export const PLUGIN_VERSION = '1.9.0';
 
 let ws: WebSocket | null = null;
 let reconnectTimer: any = null;

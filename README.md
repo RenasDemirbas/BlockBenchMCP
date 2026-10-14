@@ -11,7 +11,7 @@ Every change goes into Blockbench's undo history. Press `Ctrl+Z` to revert any s
 
 | | |
 |---|---|
-| **Version** | 1.8.0 · [Changelog](CHANGELOG.md) |
+| **Version** | 1.9.0 · [Changelog](CHANGELOG.md) |
 | **Blockbench** | 5.2 or later recommended. 5.1.4 also works, but 5.2-only tools return a "requires 5.2" error there. |
 | **Client** | Claude Desktop and Claude Code. Developed on Windows. |
 | **Node.js** | 18 or later |
@@ -182,7 +182,7 @@ OUT=C:/output/folder node scripts/examples/build-gunslinger.mjs
 
 | Area | Tools |
 |---|---|
-| Project | `get_status`, `list_formats`, `create_project`, `get_project_info`, `set_project_settings`, `project_file` (open, save, export, export_animations, import, get_json, switch_tab, close) |
+| Project | `get_status`, `blockbench_window` (status, show, hide), `list_formats`, `create_project`, `get_project_info`, `set_project_settings`, `project_file` (open, save, export, export_animations, import, get_json, switch_tab, close) |
 | Geometry | `add_groups`, `add_cubes`, `add_meshes`, `add_mesh_primitive`, `add_loft`, `edit_mesh`, `transform_mesh`, `add_planes`, `add_locators`, `add_bounding_boxes`, `list_outline`, `get_element`, `update_elements`, `delete_elements`, `duplicate_elements`, `mirror_elements`, `select_elements` |
 | Texture | `create_texture`, `generate_texture_template`, `list_textures`, `get_texture`, `import_texture`, `apply_texture`, `paint_texture`, `paint_faces`, `bake_texture`, `palette`, `texture_layers`, `resize_texture`, `set_texture_resolution`, `delete_texture` |
 | UV | `unwrap_mesh`, `uv` (inspect, set_cube, set_mesh, auto) |
@@ -264,6 +264,26 @@ long operations keep running while Blockbench is minimized.
 
 The default port is 8188. To change it, set both the `BB_BRIDGE_PORT` environment variable and
 **Settings → General → MCP Bridge Port** in Blockbench to the same value.
+
+### Headless mode
+
+Set `BB_HEADLESS=1` in the server's `env` and Blockbench no longer has to be open. When a tool needs
+Blockbench and none is connected, the server starts it with its window hidden, waits for the plugin to
+connect (about 5 seconds), and then runs the tool. Every tool works while the window is hidden;
+screenshots and renders draw offscreen.
+
+```json
+"env": { "BB_BRIDGE_PORT": "8188", "BB_HEADLESS": "1" }
+```
+
+- `blockbench_window` shows the window when you want to look at the model, and hides it again.
+  It works with or without headless mode.
+- A Blockbench that is already running is used as it is; its window is not hidden.
+- `BB_EXECUTABLE` points to Blockbench if it is not in the default install folder.
+  `BB_LAUNCH_TIMEOUT_MS` (default 90000) limits how long the server waits for the plugin.
+- Hiding the window is Windows-only for now. On macOS and Linux the server still starts Blockbench,
+  but the window shows. On a Linux server without a display, point `BB_EXECUTABLE` at a script
+  that runs Blockbench under `xvfb-run`.
 
 ## Adding tools from another plugin
 
@@ -356,6 +376,7 @@ node scripts/call-tool.mjs pixel_art '{"action":"render","view":"isometric","siz
 | `verify-v52-features.mjs` | Blockbench 5.2 features | Blockbench 5.2 |
 | `verify-pixel-art.mjs` | Pixel art output (PNG and JSON) | Open Blockbench |
 | `verify-lowpoly-tools.mjs` | Mesh painting, unwrap, edit/loft/transform, bake, palette, reference, recording. Pick sections with `node scripts/verify-lowpoly-tools.mjs paint,bake` | Open Blockbench, `REF_DIR` for the reference tests |
+| `verify-headless.mjs` | Headless mode: the server starts Blockbench hidden, tools and screenshots work, `blockbench_window` shows/hides it | Windows, Blockbench closed |
 | `verify-hidden-window-timers.mjs` | Timers while the window is in the background | Minimized Blockbench |
 
 Run any of them with `node scripts/<name>`.

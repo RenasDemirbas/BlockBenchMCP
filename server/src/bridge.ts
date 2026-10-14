@@ -8,6 +8,7 @@
 // race to take over the port.
 import { WebSocketServer, WebSocket } from 'ws';
 import { randomUUID } from 'node:crypto';
+import { headlessEnabled, ensureBlockbench } from './headless';
 
 const PORT = Number(process.env.BB_BRIDGE_PORT || 8188);
 const DEFAULT_TIMEOUT_MS = 30_000;
@@ -243,7 +244,18 @@ export function getPluginInfo() {
 
 export class BridgeError extends Error {}
 
-export function call(command: string, params: any = {}, timeoutMs = DEFAULT_TIMEOUT_MS): Promise<any> {
+export async function call(command: string, params: any = {}, timeoutMs = DEFAULT_TIMEOUT_MS): Promise<any> {
+  try {
+    return await send(command, params, timeoutMs);
+  } catch (err) {
+    // A relay instance gets the hub's "not connected" reply as a plain Error, so match the text.
+    if (!headlessEnabled || (err as Error).message !== NOT_CONNECTED_MSG) throw err;
+  }
+  await ensureBlockbench(() => send('get_status', {}, 3000));
+  return send(command, params, timeoutMs);
+}
+
+function send(command: string, params: any, timeoutMs: number): Promise<any> {
   const target = mode === 'hub' ? activePlugin() : (upstream && upstream.readyState === WebSocket.OPEN ? upstream : null);
   if (!target) {
     return Promise.reject(new BridgeError(NOT_CONNECTED_MSG));

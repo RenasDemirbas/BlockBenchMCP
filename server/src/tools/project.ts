@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { type McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { forward, toToolResult, errorResult } from '../respond';
 import { call, isConnected, getPluginInfo } from '../bridge';
+import { headlessEnabled, windowCommand } from '../headless';
 import { readOnly, mutating, destructive, registerGroup } from './shared';
 
 export function registerProjectTools(server: McpServer) {
@@ -12,7 +13,7 @@ export function registerProjectTools(server: McpServer) {
     inputSchema: {},
     annotations: readOnly,
   }, async () => {
-    if (!isConnected()) {
+    if (!isConnected() && !headlessEnabled) {
       return toToolResult({
         connected: false,
         help: 'Blockbench is not connected. Start Blockbench and make sure the "Blockbench MCP Bridge" plugin is installed and enabled (File > Plugins). It auto-connects within ~3 seconds.',
@@ -20,7 +21,20 @@ export function registerProjectTools(server: McpServer) {
     }
     try {
       const result = await call('get_status', {});
-      return toToolResult({ ...result, ...getPluginInfo() });
+      return toToolResult({ ...result, ...getPluginInfo(), headless: headlessEnabled || undefined });
+    } catch (err) {
+      return errorResult(err);
+    }
+  });
+
+  server.registerTool('blockbench_window', {
+    title: 'Show or hide the Blockbench window',
+    description: 'Show, hide or check the Blockbench app window (Windows only). Every tool keeps working while it is hidden — screenshots and renders draw offscreen. With the env var BB_HEADLESS=1 the server also starts Blockbench by itself, hidden, when a tool needs it; use "show" when the user wants to look at the model. Works without a plugin connection. Returns window: visible, hidden or none (Blockbench not running).',
+    inputSchema: { action: z.enum(['status', 'show', 'hide']) },
+    annotations: mutating,
+  }, async ({ action }) => {
+    try {
+      return toToolResult({ window: await windowCommand(action) });
     } catch (err) {
       return errorResult(err);
     }
