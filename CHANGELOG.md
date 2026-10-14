@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Painting a group that holds no cubes or meshes names the groups that do again, with child counts.
 - The source is split into smaller modules (the 1500-line tool file, painting, outliner edits). Tools
   behave the same; their schemas are unchanged.
 - `add_cubes`, `add_groups`, `add_meshes`, `add_planes`, `add_locators`, `add_bounding_boxes`,

@@ -58,8 +58,21 @@ export function collectSurfaceElements(id: string, context: string): any[] {
     n.children?.forEach(walk);
   };
   walk(node);
-  if (!out.length) fail(`${context}: "${node.name}" (${node.type}) contains no cubes or meshes. Pass "*" for the whole model.`);
-  return out;
+  if (out.length) return out;
+  if (node instanceof Group) {
+    let descendants = 0;
+    const count = (g: any) => g.children?.forEach((c: any) => { descendants++; count(c); });
+    count(node);
+    const withSurfaces = (Project.groups as any[])
+      .filter((g) => g !== node && g.children?.some(isSurfaceElement))
+      .map((g) => g.name);
+    fail(
+      `${context}: group "${node.name}" holds no cubes or meshes (${node.children?.length ?? 0} direct children, ${descendants} descendants — an empty rig bone).`
+      + ` Pass "*" for every cube and mesh in the model (${(Project.elements as any[]).filter(isSurfaceElement).length} total)`
+      + (withSurfaces.length ? `, or one of the groups that do hold them: ${withSurfaces.slice(0, 12).join(', ')}${withSurfaces.length > 12 ? ', …' : ''}.` : '.'),
+    );
+  }
+  fail(`${context}: "${node.name}" is a ${node.type} and contains no cubes or meshes. Pass "*" for the whole model.`);
 }
 
 function worldOf(el: any, local: P3, v: any): P3 {
