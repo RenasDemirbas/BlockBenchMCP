@@ -1,7 +1,12 @@
 # Changelog
 
-## Unreleased
+## 1.9.0 — Headless mode
 
+- Headless mode: with `BB_HEADLESS=1` the server starts Blockbench by itself when a tool needs it
+  and keeps the window hidden (Windows). See [Headless mode](README.md#headless-mode).
+- New tool `blockbench_window`: show, hide or check the Blockbench window. Tools keep working while
+  it is hidden.
+- New test: `scripts/verify-headless.mjs`.
 - Painting a group that holds no cubes or meshes names the groups that do again, with child counts.
 - The source is split into smaller modules (the 1500-line tool file, painting, outliner edits). Tools
   behave the same; their schemas are unchanged.
