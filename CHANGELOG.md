@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased
+
+- `add_cubes`, `add_groups`, `add_meshes`, `add_planes`, `add_locators`, `add_bounding_boxes`,
+  `add_ik_controllers`, `duplicate_elements` and `mirror_elements` (duplicate): when a batch fails
+  partway, nothing it created is left behind. Before, the new nodes survived the rollback and fell out
+  of their groups to the root.
+- `parent` names now look only at groups, so a cube with the same name as its group (a `floor` cube
+  in a `floor` group) no longer makes the name ambiguous.
+- `paint_texture`: a `rect` or `ellipse` with only `thickness` draws an outline. `filled` still
+  decides when it is given.
+- `generate_texture_template` / `unwrap_mesh`: `pixel_density` goes up to 512 (32 px per unit).
+  A value out of range is an error; it used to be clamped to 128 without a word.
+- New test: `scripts/verify-batch-fixes.mjs`.
+
 ## 1.8.0 — Tools from other plugins
 
 - Other Blockbench plugins can add MCP tools with `window.BlockbenchMCP.registerTool(definition, handler)`.
