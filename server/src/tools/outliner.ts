@@ -296,15 +296,16 @@ export function registerOutlinerTools(server: McpServer) {
 
   server.registerTool('validate_model', {
     title: 'Validate model',
-    description: 'Model health check. Reports: (1) cube-cube INTERSECTIONS via exact OBB overlap tests — at the rest pose, or posed at animation times (pass "animation" + optional "times") to catch limbs clipping through the body mid-walk; penetration depth is in units. Overlaps inside the SAME bone are skipped by default (intentional in blocky modeling). (2) Static findings: degenerate cubes, elements outside any bone, untextured faces, UVs out of texture bounds, duplicate bone names, java_block rotation violations. (3) Model stats. Run before export and after big animation passes.',
+    description: 'Model health check. Reports: (1) cube-cube INTERSECTIONS via exact OBB overlap tests — at the rest pose, or posed at animation times (pass "animation" + optional "times") to catch limbs clipping through the body mid-walk; penetration depth is in units. Overlaps inside the SAME bone are skipped by default (intentional in blocky modeling). (2) DETACHED parts: cubes/meshes that float free of the main body — e.g. legs hovering 1 unit under the torso, or a paw offset from its leg. A part counts as attached when its world box touches or overlaps a part in its own, parent, child or sibling bone; each detached part is reported with its bone, nearest neighbour and the [x,y,z] gap in units, at the rest pose or at the same animation times. No need to compute gaps by hand from query_geometry. (3) Static findings: degenerate cubes, elements outside any bone, untextured faces, UVs out of texture bounds, duplicate bone names, java_block rotation violations. (4) Model stats. Run before export and after big animation passes.',
     inputSchema: {
       animation: z.string().optional().describe('Check poses of this animation instead of the rest pose'),
       times: z.array(z.number()).optional().describe('Animation times in seconds (default: 8 even samples over its length)'),
-      tolerance: z.number().optional().describe('Ignore penetrations shallower than this (units), default 0.01'),
+      tolerance: z.number().optional().describe('Ignore penetrations shallower than this, and gaps up to this (units), default 0.01'),
       include_same_bone: z.boolean().optional().describe('Also report overlaps between cubes of the same bone'),
-      max_pairs: z.number().optional().describe('Max intersection pairs reported, default 40'),
+      max_pairs: z.number().optional().describe('Max intersection pairs (and detached parts) reported, default 40'),
       checks: z.boolean().optional().describe('Run static findings, default true'),
       intersections: z.boolean().optional().describe('Run intersection detection, default true'),
+      detached: z.boolean().optional().describe('Run detached-part detection, default true'),
     },
     annotations: readOnly,
   }, forward('validate_model', 60_000));

@@ -299,6 +299,96 @@ function collectIntersections(tolerance: number, includeSameBone: boolean, maxPa
   return hits;
 }
 
+/** Per-axis gap between two world AABBs (0 on an axis where they overlap or touch). */
+function aabbGap(a: any, b: any): [number, number, number] {
+  return (['x', 'y', 'z'] as const).map((k) => Math.max(0, a.min[k] - b.max[k], b.min[k] - a.max[k])) as [number, number, number];
+}
+
+/** Nearest ancestor bone that holds solids itself (empty pivot groups are skipped); null = root. */
+function solidParentBone(bone: any, solidBones: Set<any>): any {
+  let p = bone?.parent;
+  while (p && p !== 'root') {
+    if (p instanceof Group && solidBones.has(p)) return p;
+    p = p.parent;
+  }
+  return null;
+}
+
+/**
+ * Cubes/meshes that float free of the model. Two solids are connected when their
+ * world AABBs touch or overlap (gap <= tolerance on every axis) and they sit in
+ * the same bone or in parent/child/sibling bones. The largest connected cluster is
+ * the model; every solid outside it is reported with its nearest related neighbour.
+ * shortcut: AABBs, so a rotated cube counts as touching a bit early; use SAT distance if that misleads.
+ */
+function collectDetached(tolerance: number, maxItems: number): any[] {
+  const data = Project.elements.filter((el: any) =>
+    (el instanceof Cube || el instanceof Mesh) && el.visibility !== false && el.mesh)
+    .map((el: any) => {
+      const corners = worldCorners(el);
+      return corners && { el, bone: boneOf(el), box: new THREE.Box3().setFromPoints(corners) };
+    }).filter(Boolean) as { el: any; bone: any; box: any }[];
+  if (data.length < 2) return [];
+
+  const solidBones = new Set(data.map((d) => d.bone));
+  const parentOf = new Map([...solidBones].map((b) => [b, solidParentBone(b, solidBones)]));
+  // Siblings count too: vanilla rigs hang body, head and legs side by side under one empty root bone.
+  const related = (a: any, b: any) => a === b || parentOf.get(a) === b || parentOf.get(b) === a || parentOf.get(a) === parentOf.get(b);
+
+  const root = data.map((_, i) => i);
+  const find = (i: number): number => (root[i] === i ? i : (root[i] = find(root[i])));
+  const pairs: { i: number; j: number; gap: [number, number, number]; dist: number }[] = [];
+  for (let i = 0; i < data.length; i++) {
+    for (let j = i + 1; j < data.length; j++) {
+      if (!related(data[i].bone, data[j].bone)) continue;
+      const gap = aabbGap(data[i].box, data[j].box);
+      if (gap.every((g) => g <= tolerance)) root[find(i)] = find(j);
+      else pairs.push({ i, j, gap, dist: Math.hypot(...gap) });
+    }
+  }
+
+  // Main cluster: the biggest; on a tie the one nearest the root bone (the body, not the stray leg).
+  const depth = (bone: any) => { let n = 0; for (let p = bone; p && p !== 'root'; p = p.parent) n++; return n; };
+  const clusters = new Map<number, { size: number; depth: number }>();
+  data.forEach((d, i) => {
+    const c = clusters.get(find(i)) || { size: 0, depth: Infinity };
+    clusters.set(find(i), { size: c.size + 1, depth: Math.min(c.depth, depth(d.bone)) });
+  });
+  const main = [...clusters.entries()].sort((a, b) => b[1].size - a[1].size || a[1].depth - b[1].depth)[0][0];
+
+  const out: any[] = [];
+  data.forEach((d, i) => {
+    if (find(i) === main) return;
+    // Nearest related solid outside its own cluster, preferring the main body (closing that gap attaches it).
+    let best: (typeof pairs)[number] | null = null;
+    let bestInMain = false;
+    for (const p of pairs) {
+      if (p.i !== i && p.j !== i) continue;
+      const other = find(p.i === i ? p.j : p.i);
+      if (other === find(i)) continue;
+      const inMain = other === main;
+      if (!best || (inMain && !bestInMain) || (inMain === bestInMain && p.dist < best.dist)) { best = p; bestInMain = inMain; }
+    }
+    const other = best ? data[best.i === i ? best.j : best.i] : null;
+    out.push({
+      element: d.el.name,
+      bone: d.bone?.name ?? 'root',
+      nearest: other?.el.name,
+      nearest_bone: other ? (other.bone?.name ?? 'root') : undefined,
+      gap: best ? best.gap.map(round3) : undefined,
+      distance: best ? round3(best.dist) : undefined,
+      note: other ? undefined : 'no solid in its own, parent, child or sibling bone to attach to',
+    });
+  });
+  out.sort((a, b) => (b.distance ?? -1) - (a.distance ?? -1));
+  if (out.length > maxItems) {
+    const total = out.length;
+    out.length = maxItems;
+    out.push({ note: `...${total - maxItems} more detached elements truncated (raise max_pairs to see all)` });
+  }
+  return out;
+}
+
 function staticChecks(): { findings: any[]; stats: any } {
   const findings: any[] = [];
   const add = (level: string, type: string, message: string, elements?: string[]) => {
@@ -448,23 +538,36 @@ register('validate_model', (params) => {
     out.ok = !findings.some((f) => f.level === 'error');
   }
 
-  if (runIntersections) {
+  const runDetached = params.detached !== false;
+  if (runIntersections || runDetached) {
+    const count = (list: any[]) => list.filter((h: any) => !h.note || h.element).length;
+    const samples = samplePoses(params.animation ? params : {}, (time) => ({
+      time,
+      intersections: runIntersections ? collectIntersections(tolerance, includeSameBone, maxPairs) : undefined,
+      detached: runDetached ? collectDetached(tolerance, maxPairs) : undefined,
+    }));
     if (params.animation) {
-      const samples = samplePoses(params, (time) => ({
-        time,
-        intersections: collectIntersections(tolerance, includeSameBone, maxPairs),
-      }));
       out.animation = params.animation;
       out.by_time = samples.map((s: any) => ({
         time: s.time,
-        count: s.intersections.filter((h: any) => !h.note).length,
+        count: s.intersections ? count(s.intersections) : undefined,
         intersections: s.intersections,
+        detached_count: s.detached ? count(s.detached) : undefined,
+        detached: s.detached,
       }));
     } else {
-      out.intersections = samplePoses({}, () => collectIntersections(tolerance, includeSameBone, maxPairs))[0];
-      out.intersection_count = out.intersections.filter((h: any) => !h.note).length;
+      const s = samples[0];
+      if (s.intersections) {
+        out.intersections = s.intersections;
+        out.intersection_count = count(s.intersections);
+      }
+      if (s.detached) {
+        out.detached = s.detached;
+        out.detached_count = count(s.detached);
+      }
     }
-    out.intersection_note = 'Overlaps within the same bone are skipped by default (intentional in blocky modeling). penetration is in model units (1/16 block).';
+    if (runIntersections) out.intersection_note = 'Overlaps within the same bone are skipped by default (intentional in blocky modeling). penetration is in model units (1/16 block).';
+    if (runDetached) out.detached_note = 'detached = cube/mesh not touching the main body through its own, parent, child or sibling bones; gap is the world-space [x,y,z] distance in units to the nearest such neighbour.';
   }
   return out;
 });
