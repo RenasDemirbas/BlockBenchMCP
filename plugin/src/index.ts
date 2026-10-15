@@ -39,7 +39,7 @@ Plugin.register('blockbench_mcp', {
   author: 'BlockBenchMCP',
   description: 'Lets AI assistants control Blockbench through the Model Context Protocol: modeling, texturing, UV, rigged & group animations, rendering, pixel-art sprite export and model export.',
   icon: 'hub',
-  version: '1.9.0',
+  version: '1.9.0.1',
   variant: 'desktop',
   min_version: '5.0.0',
   tags: ['Interface', 'MCP'],
