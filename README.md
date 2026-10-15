@@ -131,8 +131,8 @@ screenshot after each step and asking for fixes is less work than fixing everyth
 4. **Texture.** First `generate_texture_template`, then `paint_texture` / `paint_faces`. Without the
    template, many faces share one UV area and painting one repaints the others.
 5. **Animation.** `create_animation`, `set_keyframes`, and `mirror_keyframes` for left-right pairs.
-   Then use `validate_model` to check for parts intersecting during the animation, and
-   `query_geometry` to check that the feet touch the ground.
+   Then use `validate_model` to check for parts intersecting or floating loose (detached) during the
+   animation, and `query_geometry` to check that the feet touch the ground.
 6. **Export.** `project_file` actions `export` and `export_animations`. For 2D games, `pixel_art` action `export_sheet`.
 
 Example request:
@@ -372,6 +372,7 @@ node scripts/call-tool.mjs pixel_art '{"action":"render","view":"isometric","siz
 | `e2e-test.mjs` | Full modeling scenario | Open Blockbench |
 | `e2e-pro-test.mjs` | Validation, queries, mirroring, painting | Open Blockbench |
 | `verify-paint-ops.mjs` | Paint operations | Open Blockbench |
+| `verify-detached.mjs` | `validate_model` detached parts: attached rig passes, floating leg and offset paw are found, at rest and at animation times | Open Blockbench |
 | `verify-field-fixes.mjs` | 1.3 fixes | An open project |
 | `verify-v52-features.mjs` | Blockbench 5.2 features | Blockbench 5.2 |
 | `verify-pixel-art.mjs` | Pixel art output (PNG and JSON) | Open Blockbench |

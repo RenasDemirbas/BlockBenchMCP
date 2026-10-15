@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+- `validate_model` finds detached parts: a cube or mesh that does not touch the main body through its
+  own, parent, child or sibling bones (a leg floating 1 unit under the torso, a paw beside its leg).
+  Each one is listed with its bone, the nearest neighbour and the `[x, y, z]` gap in units, at the rest
+  pose or at the given animation times. On by default; `detached: false` turns it off. `tolerance`
+  (default 0.01) also sets the largest gap that still counts as touching.
+- New test: `scripts/verify-detached.mjs`.
+
 ## 1.9.0 — Headless mode
 
 - Headless mode: with `BB_HEADLESS=1` the server starts Blockbench by itself when a tool needs it
