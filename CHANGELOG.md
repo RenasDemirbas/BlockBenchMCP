@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.9.0.1 — Detached parts
 
 - `validate_model` finds detached parts: a cube or mesh that does not touch the main body through its
   own, parent, child or sibling bones (a leg floating 1 unit under the torso, a paw beside its leg).

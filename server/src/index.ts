@@ -8,7 +8,7 @@ import { registerTools, syncExternalTools } from './tools';
 
 const server = new McpServer({
   name: 'blockbench',
-  version: '1.9.0',
+  version: '1.9.0.1',
 }, {
   instructions: [
     'Blockbench modeling conventions (Minecraft-style):',
