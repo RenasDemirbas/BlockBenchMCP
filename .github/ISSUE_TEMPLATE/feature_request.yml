@@ -1,0 +1,21 @@
+name: Feature request
+description: A new tool, a parameter, or support for a Blockbench feature.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: goal
+    attributes:
+      label: What do you want to make or do?
+      description: Describe the result you are after, not only the tool you imagine.
+    validations:
+      required: true
+  - type: textarea
+    id: today
+    attributes:
+      label: What happens today
+      description: What the assistant does instead, or where it gets stuck.
+  - type: input
+    id: blockbench
+    attributes:
+      label: Blockbench feature it relies on (if any)
+      placeholder: e.g. 5.2 "Generate PBR Map", a plugin, a format

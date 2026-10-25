@@ -1,0 +1,25 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run build:release
+      # Needs no Blockbench: MCP protocol and bridge with a fake plugin, and the origin check.
+      - run: node scripts/smoke-test.mjs
+      - run: node scripts/verify-bridge-origin.mjs

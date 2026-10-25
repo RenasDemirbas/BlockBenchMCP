@@ -1,0 +1,43 @@
+name: Bug report
+description: A tool fails, does the wrong thing or leaves Blockbench in a bad state.
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you asked for, which tool ran (if you know), and what went wrong.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: How to reproduce
+      description: The prompt, or the tool call with its arguments (copy it from your MCP client), and the model format.
+      render: json
+  - type: textarea
+    id: status
+    attributes:
+      label: get_status output
+      description: Ask the assistant for "the Blockbench status" and paste the result. It has the plugin, server and Blockbench versions.
+      render: json
+    validations:
+      required: true
+  - type: input
+    id: client
+    attributes:
+      label: MCP client and OS
+      placeholder: Claude Desktop on Windows 11
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or screenshots
+      description: Blockbench console (Ctrl+Shift+I, lines starting with [MCP]) or your MCP client's server log.
