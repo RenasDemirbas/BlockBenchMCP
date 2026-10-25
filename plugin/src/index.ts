@@ -32,6 +32,8 @@ import './handlers/pixelart';
 import './handlers/misc';
 import { connect, shutdown, restart, connectionState, PLUGIN_VERSION } from './socket';
 import { listCommands, registerExternalTool } from './registry';
+// Bundled as a data URL (see scripts/build.mjs): the small-size cut reads best at the plugin list's 48 px.
+import pluginIcon from '../../assets/blockbench-mcp-small.svg';
 
 const deletables: any[] = [];
 function reg<T>(item: T): T {
@@ -41,9 +43,9 @@ function reg<T>(item: T): T {
 
 Plugin.register('blockbench_mcp', {
   title: 'Blockbench MCP Bridge',
-  author: 'BlockBenchMCP',
+  author: 'Renas Demirbas',
   description: 'Lets AI assistants control Blockbench through the Model Context Protocol: modeling, texturing, UV, rigged & group animations, rendering, pixel-art sprite export and model export.',
-  icon: 'hub',
+  icon: pluginIcon,
   version: '1.10.0',
   variant: 'desktop',
   min_version: '5.0.0',

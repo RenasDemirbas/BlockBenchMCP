@@ -1,15 +1,13 @@
 {
   "name": "blockbench-mcp",
   "version": "1.10.0",
-  "description": "Comprehensive MCP server for Blockbench - modeling, texturing, rigged and group-based animation via Claude",
+  "description": "MCP server and Blockbench plugin: modeling, texturing, rigging and animation in Blockbench through an AI assistant",
   "license": "GPL-3.0-or-later",
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "npm run build:plugin && npm run build:server",
-    "build:plugin": "esbuild plugin/src/index.ts --bundle --format=iife --platform=node --external:electron --outfile=dist/blockbench_mcp.js",
-    "build:server": "esbuild server/src/index.ts --bundle --format=esm --platform=node --packages=external --outfile=dist/mcp-server.js",
-    "build:release": "npm run build:plugin && esbuild server/src/index.ts --bundle --format=esm --platform=node --banner:js=\"import { createRequire as __cr } from 'module'; const require = __cr(import.meta.url);\" --outfile=dist/mcp-server.js",
+    "build": "node scripts/build.mjs",
+    "build:release": "node scripts/build.mjs --release",
     "typecheck": "tsc --noEmit",
     "install:plugin": "node scripts/install-plugin.mjs"
   },
@@ -23,5 +21,6 @@
     "@modelcontextprotocol/sdk": "latest",
     "ws": "^8.18.0",
     "zod": "^3.23.0"
-  }
+  },
+  "author": "Renas Demirbas"
 }
