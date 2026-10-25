@@ -96,6 +96,8 @@ export function registerAnimationTools(server: McpServer) {
       bone: z.string().optional().describe('Filter by bone name'),
       channel: z.enum(['rotation', 'position', 'scale', 'particle', 'sound', 'timeline']).optional(),
       time_range: z.array(z.number()).length(2).optional().describe('[start, end] seconds inclusive'),
+      relative_to_playhead: z.enum(['before', 'after']).optional().describe('Only keyframes strictly before/after the playhead (Blockbench 5.2 "Select Keyframes Before/After Playhead") — e.g. delete everything after 1s, or shift the second half'),
+      playhead: z.number().optional().describe('Playhead time for relative_to_playhead, seconds (default: the timeline\'s current time)'),
       delete: z.boolean().optional(),
       set_time: z.number().optional().describe('Move every matched keyframe to this absolute time in seconds (applied before time_offset/time_scale)'),
       time_offset: z.number().optional().describe('Shift matched keyframes by this many seconds'),

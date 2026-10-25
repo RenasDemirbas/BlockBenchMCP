@@ -103,6 +103,22 @@ export function registerUvTools(server: McpServer) {
     annotations: mutating,
   }, forward('bake_texture'));
 
+  server.registerTool('blend_seams', {
+    title: 'Blend texture seams (soft edges between faces)',
+    description: 'Soften the hard colour breaks where faces meet — across UV seams on meshes, around cube edges and where separate parts touch. The world-space counterpart of Blockbench 5.2\'s screen-space brush: each texel within "width" texels of a face edge is averaged with the texels next to it IN 3D, including those of the neighbouring face, so both sides meet at a shared colour and fade back to their own colour further in. Faces meeting at more than "max_angle" (default 100°, so cube corners blend) are left alone. Use after painting flat colours or projecting a reference, before bake_texture.',
+    inputSchema: {
+      elements: z.array(z.string()).optional().describe('Cubes/meshes/groups (default whole model)'),
+      texture: z.string().optional().describe('Only faces using this texture'),
+      width: z.number().optional().describe('Blend zone in texels from the edge, 0.5-16 (default 2)'),
+      strength: z.number().optional().describe('0-1, how far texels at the seam move to the shared colour (default 0.75)'),
+      max_angle: z.number().optional().describe('Largest angle between faces that still blend, degrees (default 100)'),
+      between: z.enum(['faces', 'elements']).optional().describe('faces (default): every face edge; elements: only where different cubes/meshes meet (a sleeve meeting a glove)'),
+      layer: z.string().optional().describe('Write the blended texels into this layer (created if missing) to keep the base untouched'),
+      only_painted: z.boolean().optional().describe('Skip transparent texels (default true)'),
+    },
+    annotations: mutating,
+  }, forward('blend_seams'));
+
   server.registerTool('palette', {
     title: 'Colour ramps & palette lock',
     description: 'Colour discipline for pixel-art textures.\n- ramp {colors: ["#base", ...], shadows (2), highlights (2), ramp?}: build a hue-shifting ramp per base colour (shadows darker + cooler + slightly more saturated, highlights lighter + warmer + less saturated). Returns the hexes and a swatch image — pick flat colours and accents from these so the whole character shares one coherent palette.\n- extract {texture, max_colors?}: unique colour count, most used colours, and a reduced palette.\n- quantize {texture, palette, layer?, dither?}: snap every pixel to a palette — "auto" (median cut to max_colors, default 24), "ramps" (ramps from "colors"), a built-in (pico8, sweetie16, endesga32, db32, aap64, resurrect64, apollo) or an array of hexes. Run it last to clean up stray colours from painting/baking/projection. With texture layers it works on the given (or active) layer.',

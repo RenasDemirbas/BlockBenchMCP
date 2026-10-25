@@ -4,6 +4,7 @@
 // Screencam if the offscreen path fails.
 import { register, fail, requireProject } from '../registry';
 import { clampInt, textureCoverage } from '../util';
+import { withViewMode } from '../viewmode';
 
 const ANGLE_PRESETS = ['initial', 'top', 'bottom', 'south', 'north', 'east', 'west', 'isometric_right', 'isometric_left', 'true_isometric_right', 'true_isometric_left'];
 
@@ -79,6 +80,8 @@ export function modelBounds(includeReferenceModels = false): { center: any; radi
   for (const el of Project.elements) {
     if (el.visibility === false || !el.mesh || !el.mesh.geometry) continue;
     if (!(el instanceof Cube) && !(el instanceof Mesh)) continue;
+    // Armature skinning moves mesh vertices in place; the cached box is the rest pose.
+    if (el instanceof Mesh && el.getArmature?.()) el.mesh.geometry.computeBoundingBox();
     box.expandByObject(el.mesh);
     any = true;
   }
@@ -328,10 +331,11 @@ function emptyRenderDiagnosis(coverage: number | undefined): string | undefined 
 }
 
 register('capture_screenshot', async (params) => {
-  const shot = await takeScreenshotDetailed(params || {});
+  const shot = await withViewMode(params?.view_mode, () => takeScreenshotDetailed(params || {}));
   const warning = emptyRenderDiagnosis(shot.coverage);
   return {
     angle: params?.camera ? 'custom' : (params?.angle ?? 'isometric_right'),
+    view_mode: params?.view_mode,
     coverage: shot.coverage !== undefined ? Math.round(shot.coverage * 1000) / 1000 : undefined,
     warning,
     __image: shot.image,

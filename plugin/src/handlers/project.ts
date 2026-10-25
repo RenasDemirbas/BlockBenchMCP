@@ -1,6 +1,7 @@
 // Project lifecycle: create, inspect, settings, open/save/close, tabs.
 import { register, fail, requireProject } from '../registry';
 import { describeTexture, systemPaths } from '../util';
+import { loadModelFromDisk } from './io';
 
 const FORMAT_NOTES: Record<string, string> = {
   free: 'Generic model. Most flexible: meshes, armatures, animations, per-texture UV size. Animations are saved inside the .bbmodel only.',
@@ -35,6 +36,9 @@ function formatInfo(format: any) {
       texture_meshes: !!format.texture_meshes,
       armature_rig: !!format.armature_rig,
       bounding_boxes: !!format.bounding_boxes,
+      pbr: !!format.pbr,
+      // 5.2: false means animations take plain numbers only (no Molang expressions).
+      molang: format.molang !== false,
     },
   };
 }
@@ -162,14 +166,7 @@ register('set_project_settings', (params) => {
 
 register('open_project', async (params) => {
   if (!params.path) fail('Missing path to a model file (.bbmodel, .geo.json, block model .json, .jem, ...).');
-  const content: string = await new Promise((resolve, reject) => {
-    try {
-      Blockbench.read([params.path], { readtype: 'text', errorbox: false }, (files: any[]) => {
-        resolve(files[0].content);
-      });
-    } catch (err) { reject(err); }
-  });
-  loadModelFile({ path: params.path, name: PathModule.basename(params.path), content });
+  await loadModelFromDisk(params.path, params);
   requireProject();
   return { uuid: Project.uuid, name: Project.name, format: Format.id };
 });

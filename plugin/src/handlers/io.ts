@@ -67,21 +67,49 @@ register('export_animations', (params) => {
   return { exported: animations.map((a: any) => a.name), path: params.path };
 });
 
-register('import_model', async (params) => {
-  if (!params.path) fail('Missing absolute "path" to a model file.');
-  const content: string = await new Promise((resolve, reject) => {
+function readText(path: string): Promise<string> {
+  return new Promise((resolve, reject) => {
     try {
-      Blockbench.read([params.path], { readtype: 'text', errorbox: false }, (files: any[]) => resolve(files[0].content));
+      Blockbench.read([path], { readtype: 'text', errorbox: false }, (files: any[]) => resolve(files[0].content));
     } catch (err) { reject(err); }
   });
+}
+
+/**
+ * Open a model file as a new tab. A Java child model (only a "parent", no
+ * elements) normally stops at a question box; resolve_parents decides it up
+ * front: true (default) merges the whole parent chain into one editable
+ * model (Blockbench 5.2), false opens just the child.
+ */
+export async function loadModelFromDisk(path: string, params: { resolve_parents?: boolean } = {}): Promise<string> {
+  const content = await readText(path);
+  // Only Java block/item models take the option — other codecs read a third
+  // load() argument differently (Bedrock's client-entity loader treats it as "add").
+  const args = isJavaChildModel(content) ? { resolve_parent: params.resolve_parents !== false } : undefined;
+  loadModelFile({ path, name: PathModule.basename(path), content }, args);
+  return content;
+}
+
+function isJavaChildModel(content: string): boolean {
+  try {
+    const model = JSON.parse(content);
+    return !!model && typeof model.parent === 'string' && !model.elements && !model.format_version;
+  } catch {
+    return false;
+  }
+}
+
+register('import_model', async (params) => {
+  if (!params.path) fail('Missing absolute "path" to a model file.');
   if (params.merge && Project) {
     // Merge bedrock geometry into the current project
+    const content = await readText(params.path);
     let model;
     try { model = JSON.parse(content); } catch { fail('File is not valid JSON — merge import supports bedrock .geo.json.'); }
     Codecs.bedrock.parse(model, params.path, { import_to_current_project: true });
     return { imported: params.path, mode: 'merge', format: Format.id };
   }
-  loadModelFile({ path: params.path, name: PathModule.basename(params.path), content });
+  await loadModelFromDisk(params.path, params);
   if (!Project) fail('Blockbench did not recognize this file format.');
   return { imported: params.path, mode: 'new_project', format: Format.id, project: Project.uuid };
 });

@@ -35,6 +35,7 @@ export function registerDisplayTools(server: McpServer) {
       shading: z.boolean().optional().describe('Flat lighting when false'),
       background: z.string().optional().describe('CSS color for an opaque backdrop (default: transparent). Useful to tell "transparent model" apart from "blank image".'),
       include_reference_models: z.boolean().optional().describe('Frame enabled reference models (see preview_models) together with the model — for scale comparisons'),
+      view_mode: z.enum(['textured', 'solid', 'colored_solid', 'wireframe', 'uv', 'normal', 'vertex_weight', 'weighted_bone_colors', 'material']).optional().describe('Render in this viewport view mode, then restore the user\'s: "weighted_bone_colors" colours each vertex by the bones it follows (check skinning), "material" shows PBR maps, "normal" shows face normals'),
     },
     annotations: readOnly,
   }, forward('capture_screenshot', 60_000));
@@ -69,7 +70,7 @@ export function registerDisplayTools(server: McpServer) {
 
   server.registerTool('reference_images', {
     title: 'Reference images (incl. 3D planes)',
-    description: 'Add, move and remove reference images/videos (concept art, blueprints, photos) in the Blockbench viewport. Blockbench 5.2 adds view_mode "plane": the image becomes a panel in the 3D scene that moves with the model — e.g. a side view at plane_position [0, 8, -16] facing the model. Other modes: "flat_image" (overlay fixed to the screen) and "blueprint" (pinned to an orthographic view). NOTE: these are for the USER — they do not show up in capture_screenshot. Without params it lists them.',
+    description: 'Add, move and remove reference images/videos (concept art, blueprints, photos) in the Blockbench viewport. Blockbench 5.2 adds view_mode "plane": the image becomes a panel in the 3D scene that moves with the model — e.g. a side view at plane_position [0, 8, -16] facing the model. Other modes: "flat_image" (overlay fixed to the screen) and "blueprint" (pinned to an orthographic view). Videos (mp4/mov/wmv) get "video" controls: seek, play/pause, mute, volume; the listing reports each video\'s duration, time and state. NOTE: these are for the USER — they do not show up in capture_screenshot. Without params it lists them.',
     inputSchema: {
       add: z.array(z.object({
         path: z.string().describe('Absolute path to png/jpg/gif/bmp/tiff or mp4/mov/wmv'),
@@ -86,6 +87,13 @@ export function registerDisplayTools(server: McpServer) {
         cull_backface: z.boolean().optional().describe('plane: hide the back side'),
         clear_mode: z.boolean().optional().describe('Remove the image background color'),
         visible: z.boolean().optional(),
+        video: z.object({
+          time: z.number().optional().describe('Seek to this time in seconds'),
+          playing: z.boolean().optional().describe('Play (true) or pause (false)'),
+          muted: z.boolean().optional(),
+          volume: z.number().optional().describe('0-1'),
+        }).optional().describe('Video references (Blockbench 5.2 playback controls): seek, play/pause, sound'),
+        sync_to_timeline: z.boolean().optional().describe('Video: follow the animation timeline (default true)'),
       })).optional(),
       update: z.array(z.object({
         id: z.string().describe('Reference image name or uuid'),
@@ -101,6 +109,13 @@ export function registerDisplayTools(server: McpServer) {
         clear_mode: z.boolean().optional(),
         visible: z.boolean().optional(),
         name: z.string().optional(),
+        video: z.object({
+          time: z.number().optional().describe('Seek to this time in seconds'),
+          playing: z.boolean().optional().describe('Play (true) or pause (false)'),
+          muted: z.boolean().optional(),
+          volume: z.number().optional().describe('0-1'),
+        }).optional().describe('Video references (Blockbench 5.2 playback controls): seek, play/pause, sound'),
+        sync_to_timeline: z.boolean().optional().describe('Video: follow the animation timeline (default true)'),
       })).optional(),
       remove: z.array(z.string()).optional().describe('Names/uuids to delete'),
     },

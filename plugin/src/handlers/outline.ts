@@ -10,7 +10,8 @@ register('list_outline', (params) => {
   const walk = (nodes: any[], depth: number): any[] => {
     const out: any[] = [];
     for (const node of nodes) {
-      if (node instanceof Group) {
+      // Groups, armatures and armature bones all hold children.
+      if (node instanceof Group || (includeElements && Array.isArray(node.children) && node.children.length)) {
         const entry: any = describeNode(node);
         entry.children = depth < maxDepth ? walk(node.children, depth + 1) : `[${node.children.length} children]`;
         out.push(entry);

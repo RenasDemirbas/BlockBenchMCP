@@ -128,7 +128,10 @@ export function registerProjectTools(server: McpServer) {
       open: {
         command: 'open_project',
         description: 'Open a model file from disk as a new project tab (.bbmodel, bedrock .geo.json, java block .json, .jem, ...).',
-        inputSchema: { path: z.string() },
+        inputSchema: {
+          path: z.string(),
+          resolve_parents: z.boolean().optional().describe('Java child models (only a "parent", no elements): true (default) merges the whole parent chain into one editable model (Blockbench 5.2); false opens only the child'),
+        },
       },
       import: {
         command: 'import_model',
@@ -136,6 +139,7 @@ export function registerProjectTools(server: McpServer) {
         inputSchema: {
           path: z.string(),
           merge: z.boolean().optional().describe('import: merge into the current project (bedrock geometry only)'),
+          resolve_parents: z.boolean().optional().describe('Java child models (only a "parent", no elements): true (default) merges the whole parent chain into one editable model (Blockbench 5.2); false opens only the child'),
         },
       },
       switch_tab: {

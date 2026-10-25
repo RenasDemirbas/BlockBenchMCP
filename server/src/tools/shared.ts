@@ -42,6 +42,22 @@ export const shadeDirections = ['', 'north', 'south', 'east', 'west', 'up', 'dow
 export const layerBlendModes = ['default', 'set_opacity', 'color', 'multiply', 'add', 'darken', 'lighten', 'screen', 'overlay', 'difference', 'alpha_mask'] as const;
 export const layerParam = () => z.string().optional().describe('Paint into this texture LAYER (name/uuid) instead of the flattened texture. Missing layers are created on top at full texture size, and layers are enabled on the texture if needed — keep shading, details or decals on their own layer, then tune them with texture_layers (opacity, blend mode, visibility).');
 
+// Part of a mesh: face keys / directions / vertices / edges / a slab — or "all" / "previous" (edit_mesh steps).
+export const meshSelect = () => z.union([
+  z.literal('all'), z.literal('previous'),
+  z.object({
+    faces: z.union([z.array(z.string()), z.literal('all')]).optional().describe('Face keys (get_element) or direction names'),
+    facing: z.union([z.enum(['up', 'down', 'north', 'south', 'east', 'west']), vec3(), z.array(z.enum(['up', 'down', 'north', 'south', 'east', 'west']))]).optional().describe('Faces whose world normal points this way'),
+    within: z.number().optional().describe('Angle tolerance for "facing", default 30°'),
+    vertices: z.array(z.string()).optional(),
+    edges: z.array(z.array(z.string()).length(2)).optional().describe('[[vA, vB], ...]'),
+    where: z.object({
+      axis: z.enum(['x', 'y', 'z']).optional(), min: z.number().optional(), max: z.number().optional(),
+      space: z.enum(['local', 'world']).optional(),
+    }).optional().describe('Vertices inside a slab (and faces fully inside it), e.g. {axis:"y", min: 10} = the top part'),
+  }),
+]);
+
 export interface GroupAction {
   description: string;
   command: string;

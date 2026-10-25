@@ -296,6 +296,11 @@ register('edit_keyframes', (params) => {
   requireAnimationSupport();
   const anim = resolveAnimation(params.animation);
   const range: [number, number] = params.time_range || [-Infinity, Infinity];
+  // 5.2's "Select Keyframes Before/After Playhead", the playhead defaulting to the timeline's.
+  const side = params.relative_to_playhead;
+  if (side && side !== 'before' && side !== 'after') fail('relative_to_playhead must be "before" or "after".');
+  const playhead = Number(params.playhead ?? Timeline.time ?? 0);
+  const onSide = (t: number) => !side || (side === 'before' ? t < playhead - 1e-6 : t > playhead + 1e-6);
   const targets: any[] = [];
   for (const key in anim.animators) {
     const animator = anim.animators[key];
@@ -308,11 +313,12 @@ register('edit_keyframes', (params) => {
     for (const kf of animator.keyframes) {
       if (params.channel && kf.channel !== params.channel) continue;
       if (kf.time < range[0] - 1e-6 || kf.time > range[1] + 1e-6) continue;
+      if (!onSide(kf.time)) continue;
       targets.push(kf);
     }
   }
   if (!targets.length) {
-    fail(`No keyframes matched (bone: ${params.bone ?? 'any'}, channel: ${params.channel ?? 'any'}, time_range: ${JSON.stringify(params.time_range) ?? 'all'}). Use get_animation to inspect keyframes.`);
+    fail(`No keyframes matched (bone: ${params.bone ?? 'any'}, channel: ${params.channel ?? 'any'}, time_range: ${JSON.stringify(params.time_range) ?? 'all'}${side ? `, ${side} playhead ${playhead}s` : ''}). Use get_animation to inspect keyframes.`);
   }
   Undo.initEdit({ animations: [anim] });
   const snap = params.snap !== false;

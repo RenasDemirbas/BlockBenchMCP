@@ -7,6 +7,8 @@ import { registerOutlinerTools } from './outliner';
 import { registerTextureTools } from './textures';
 import { registerUvTools } from './uv';
 import { registerAnimationTools } from './animation';
+import { registerArmatureTools } from './armature';
+import { registerMaterialTools } from './materials';
 import { registerDisplayTools } from './display';
 import { registerPixelArtTools } from './pixelart';
 import { registerEscapeTools } from './escape';
@@ -19,6 +21,8 @@ export function registerTools(server: McpServer) {
   registerTextureTools(server);
   registerUvTools(server);
   registerAnimationTools(server);
+  registerArmatureTools(server);
+  registerMaterialTools(server);
   registerDisplayTools(server);
   registerPixelArtTools(server);
   registerEscapeTools(server);

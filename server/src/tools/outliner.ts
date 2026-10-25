@@ -2,7 +2,7 @@
 import { z } from 'zod';
 import { type McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { forward } from '../respond';
-import { vec3, vec2, readOnly, mutating, destructive, facesSchema, shadeDirections } from './shared';
+import { vec3, vec2, readOnly, mutating, destructive, facesSchema, shadeDirections, meshSelect } from './shared';
 
 export function registerOutlinerTools(server: McpServer) {
   server.registerTool('add_groups', {
@@ -90,21 +90,6 @@ export function registerOutlinerTools(server: McpServer) {
     annotations: mutating,
   }, forward('add_mesh_primitive'));
 
-  const meshSelect = () => z.union([
-    z.literal('all'), z.literal('previous'),
-    z.object({
-      faces: z.union([z.array(z.string()), z.literal('all')]).optional().describe('Face keys (get_element) or direction names'),
-      facing: z.union([z.enum(['up', 'down', 'north', 'south', 'east', 'west']), vec3(), z.array(z.enum(['up', 'down', 'north', 'south', 'east', 'west']))]).optional().describe('Faces whose world normal points this way'),
-      within: z.number().optional().describe('Angle tolerance for "facing", default 30°'),
-      vertices: z.array(z.string()).optional(),
-      edges: z.array(z.array(z.string()).length(2)).optional().describe('[[vA, vB], ...]'),
-      where: z.object({
-        axis: z.enum(['x', 'y', 'z']).optional(), min: z.number().optional(), max: z.number().optional(),
-        space: z.enum(['local', 'world']).optional(),
-      }).optional().describe('Vertices inside a slab (and faces fully inside it), e.g. {axis:"y", min: 10} = the top part'),
-    }),
-  ]);
-
   server.registerTool('edit_mesh', {
     title: 'Edit mesh topology (extrude, inset, loop cut, bevel...)',
     description: 'Box-modeling operations on a mesh, run as ordered "steps" (each its own undo step). Each step selects part of the mesh ("select"), then applies "op". select "previous" = what the last step produced (the new faces of an extrude, the inner face of an inset...), so chains like extrude → inset → extrude work in ONE call.\nOps (Blockbench\'s own tools): extrude {distance, direction: outwards|average|x+|x-|y+|y-|z+|z-, even}; inset {amount 0-100, % toward the face centre}; solidify {thickness} (give a flat cape/brim thickness); loop_cut {cuts 1-16, position 0-1, direction: which edge pair of the selected face to cut across (0/1)}; merge_vertices {distance? (by distance), center?}; dissolve_edges (select edges); create_face (select 3-4 vertices); invert_faces; split (selected faces become a new mesh).\nOps implemented here: subdivide {levels 1-3, smooth 0-1} (each quad → 4); bevel {amount, angle} chamfers every edge sharper than angle (default 30°) on a CLOSED mesh — rounds off boxy guns, boots, belts; delete {what: faces|vertices}; merge_meshes {meshes: [...]} merges others into this mesh.\nReturns per-step counts and the resulting selection. Run unwrap_mesh after the shape is final.',
@@ -157,11 +142,16 @@ export function registerOutlinerTools(server: McpServer) {
 
   server.registerTool('transform_mesh', {
     title: 'Deform mesh vertices (taper, bend, twist...)',
-    description: 'Shape a mesh (or part of it via "select", same spec as edit_mesh) with ordered deformers, in the mesh\'s local coordinates:\n- taper {axis, factor, start?, from?: "min"|"max"}: cross-section scales from start (1) to factor along the axis — trouser legs flaring out, a tapering finger. factor may be [a, b] per remaining axis.\n- bend {axis, angle, toward: "z"|"-z"|"x"...}: curl the part along axis toward a direction — elbows, a drooping hat brim, a curved cape.\n- twist {axis, angle}\n- scale {factor, pivot?}, rotate {angles: [x,y,z], pivot?}, move {offset}\n- smooth {factor 0-1, iterations}: relax toward neighbours (rounder, softer)\n- jitter {amount, seed}: seeded hand-made wobble that breaks the perfect primitive look.\nPivot defaults to the selection\'s bounding-box centre; ranges use the selection\'s extent.',
+    description: 'Shape a mesh (or part of it via "select", same spec as edit_mesh) with ordered deformers, in the mesh\'s local coordinates:\n- taper {axis, factor, start?, from?: "min"|"max"}: cross-section scales from start (1) to factor along the axis — trouser legs flaring out, a tapering finger. factor may be [a, b] per remaining axis.\n- bend {axis, angle, toward: "z"|"-z"|"x"...}: curl the part along axis toward a direction — elbows, a drooping hat brim, a curved cape.\n- twist {axis, angle}\n- scale {factor, pivot?}, rotate {angles: [x,y,z], pivot?}, move {offset}\n- smooth {factor 0-1, iterations}: relax toward neighbours (rounder, softer)\n- jitter {amount, seed}: seeded hand-made wobble that breaks the perfect primitive look.\nPivot defaults to the selection\'s bounding-box centre; ranges use the selection\'s extent.\n\nFALLOFF (proportional editing, Blockbench 5.2): "falloff": {radius, curve?, distance?} lets every op except smooth fade out over the vertices within "radius" units of the selection, so pulling a nose or bending a knee drags the surrounding surface smoothly instead of creasing at the selection edge. curve: smooth (default), linear, sharp, root, constant. distance: "linear" (straight line, default) or "connected" (along mesh edges — a nearby but separate part such as the other leg stays put).',
     inputSchema: {
       mesh: z.string().optional().describe('Mesh name/uuid'),
       meshes: z.array(z.string()).optional().describe('Several meshes, each deformed independently'),
       select: meshSelect().optional().describe('Default: the whole mesh'),
+      falloff: z.object({
+        radius: z.number().describe('Reach around the selection in model units'),
+        curve: z.enum(['smooth', 'linear', 'sharp', 'root', 'constant']).optional().describe('How the effect fades with distance, default smooth'),
+        distance: z.enum(['linear', 'connected']).optional().describe('linear = straight-line (default); connected = along mesh edges'),
+      }).optional().describe('Soft selection: the ops also move nearby unselected vertices, fading to nothing at "radius"'),
       ops: z.array(z.object({
         type: z.enum(['taper', 'bend', 'twist', 'scale', 'rotate', 'move', 'smooth', 'jitter']),
         axis: z.enum(['x', 'y', 'z']).optional().describe('taper/bend/twist: along which axis (default y)'),
@@ -253,12 +243,12 @@ export function registerOutlinerTools(server: McpServer) {
 
   server.registerTool('add_ik_controllers', {
     title: 'Add IK controllers (inverse kinematics)',
-    description: 'Rig limbs for inverse kinematics: each controller is a null object the chain\'s END bone reaches for, so a leg or arm is animated by moving ONE point instead of keyframing every joint. "target" = end bone (foot/hand), "source" = start bone (thigh/upper arm) — always pass it, otherwise the chain runs up to the top-level bone and bends the body too. The controller is placed at the target\'s pivot unless "position" is given, so the rest pose does not change.\n\nPOLES (Blockbench 5.2): a pole is a point the middle joint bends toward — without one a knee can flip sideways. Pass "pole" (existing locator/null/group) or let the tool create one: "pole_offset" is relative to the chain\'s middle joint — [0,0,-8] makes a knee bend forward (north, the way entities face), [0,0,8] makes an elbow bend back.\n\nAnimate by keyframing the controller\'s "position" channel with set_keyframes (bone = controller name). In Blockbench 5.2.1+ a controller only acts in animations where it has a keyframe — list them in "animations" to add a neutral one. Formats without IK export (bedrock, java) need bake_ik_animation first.',
+    description: 'Rig limbs for inverse kinematics: each controller is a null object the chain\'s END bone reaches for, so a leg or arm is animated by moving ONE point instead of keyframing every joint. "target" = end bone (foot/hand), "source" = start bone (thigh/upper arm) — always pass it, otherwise the chain runs up to the top-level bone and bends the body too. The controller is placed at the target\'s pivot unless "position" is given, so the rest pose does not change.\n\nPOLES (Blockbench 5.2): a pole is a point the middle joint bends toward — without one a knee can flip sideways. Pass "pole" (existing locator/null/group) or let the tool create one: "pole_offset" is relative to the chain\'s middle joint — [0,0,-8] makes a knee bend forward (north, the way entities face), [0,0,8] makes an elbow bend back.\n\nAnimate by keyframing the controller\'s "position" channel with set_keyframes (bone = controller name). In Blockbench 5.2.1+ a controller only acts in animations where it has a keyframe — list them in "animations" to add a neutral one. Formats without IK export (bedrock, java) need bake_ik_animation first.\n\nARMATURES (Blockbench 5.2, "free" format): target and source may be armature bones (add_armature) — the skinned mesh then bends with the chain. Without "source" an armature chain starts at the armature\'s top bone.',
     inputSchema: {
       controllers: z.array(z.object({
         name: z.string().optional().describe('Controller name, default "<target>_ik"'),
-        target: z.string().describe('END of the chain: bone (group) or locator, e.g. "foot_left"'),
-        source: z.string().optional().describe('START of the chain (bone), e.g. "thigh_left" — recommended'),
+        target: z.string().describe('END of the chain: bone (group or armature bone) or locator, e.g. "foot_left"'),
+        source: z.string().optional().describe('START of the chain (group or armature bone), e.g. "thigh_left" — recommended'),
         parent: z.string().optional().describe('Group to put the controller (and auto pole) in; default root'),
         position: vec3().optional().describe('Controller position (model units); default: the target\'s pivot'),
         pole: z.string().optional().describe('Existing locator / null object / group to use as the pole'),

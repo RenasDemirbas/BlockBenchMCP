@@ -3,6 +3,10 @@
 import { register, fail, requireProject } from '../registry';
 import { resolveNode, resolveParent, resolveAnimation, vec3, refreshElements, cancelCreate } from '../util';
 import { applyIkFields } from './elements';
+import { isArmatureBone, ensureRestPose } from '../rig/armature';
+
+/** Groups and (5.2+) armature bones can both be IK chain links. */
+const isChainBone = (n: any) => n instanceof Group || isArmatureBone(n);
 
 function requireIkSupport() {
   requireProject();
@@ -14,6 +18,8 @@ function requireIkSupport() {
 /** Absolute (model-space) pivot of a chain node at rest. */
 function restPivot(node: any): [number, number, number] {
   if (node instanceof Group) return node.origin.slice();
+  // An armature bone's origin is relative to its parent bone — use the world head.
+  if (isArmatureBone(node)) return node.getWorldCenter().toArray();
   if (node.position) return node.position.slice();
   const p = node.getWorldCenter?.();
   if (p) return [p.x, p.y, p.z];
@@ -24,7 +30,7 @@ function restPivot(node: any): [number, number, number] {
 function chainOf(target: any, source: any, sourceIncluded: boolean): any[] {
   const bones: any[] = [];
   let current = target;
-  while (current && current !== source && current !== 'root') {
+  while (current && current !== source && current !== 'root' && (current === target || isChainBone(current))) {
     bones.push(current);
     current = current.parent;
   }
@@ -46,9 +52,20 @@ register('add_ik_controllers', (params) => {
     for (const def of defs) {
       if (!def.target) fail(`Controller "${def.name || '?'}" needs a "target" — the bone (or locator) at the END of the chain, e.g. the foot or hand.`);
       const target = resolveNode(def.target);
+      // Armature bone heads are posed in animate mode; place controllers from the rest pose.
+      if (isArmatureBone(target)) ensureRestPose();
       const parent = resolveParent(def.parent);
-      const source = def.source ? resolveNode(def.source) : null;
-      if (source && !(source instanceof Group)) fail(`"source" must be a bone (group); "${source.name}" is a ${source.type}.`);
+      let source = def.source ? resolveNode(def.source) : null;
+      if (source && !isChainBone(source)) fail(`"source" must be a bone (group or armature bone); "${source.name}" is a ${source.type}.`);
+      // Without a source Blockbench walks up to the controller's parent, which
+      // for an armature bone would leave the armature — start at its top bone.
+      let defaultedSource = false;
+      if (!source && isArmatureBone(target)) {
+        source = target;
+        while (isArmatureBone(source.parent)) source = source.parent;
+        if (source === target) fail(`"${target.name}" is the top bone of its armature — there is no chain above it to bend. Target a bone further down (a foot or hand).`);
+        defaultedSource = true;
+      }
 
       const controller = new NullObject({
         name: def.name || `${target.name}_ik`,
@@ -106,7 +123,9 @@ register('add_ik_controllers', (params) => {
         pole: poleId ? (OutlinerNode.uuids[poleId]?.name ?? poleId) : undefined,
         active_in: wanted.length ? wanted.map((a: any) => a.name) : undefined,
       };
-      if (!source) {
+      if (defaultedSource) {
+        entry.note = `No "source": the chain starts at "${source.name}", the top bone of armature "${target.getArmature().name}". Pass "source" (e.g. the thigh) to make it shorter.`;
+      } else if (!source) {
         entry.warning = `No "source": the chain runs from ${parent === 'root' ? 'the TOP-LEVEL bone' : `"${parent.name}"`} down to "${target.name}" (${chain.length} bones), so every one of them bends. Pass "source" (e.g. the thigh or upper arm) to limit it.`;
       }
       if (chain.length < 2) entry.warning = `${entry.warning ? entry.warning + ' ' : ''}The chain has fewer than 2 bones — there is nothing to bend. Set "source" to a bone at least two levels above the target.`;

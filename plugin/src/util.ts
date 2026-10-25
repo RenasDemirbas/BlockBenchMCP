@@ -195,6 +195,8 @@ export function describeNode(node: any, deep = false): any {
     base.rotation = node.rotation.slice();
     base.vertex_count = Object.keys(node.vertices).length;
     base.face_count = Object.keys(node.faces).length;
+    const armature = node.getArmature?.();
+    if (armature) base.armature = armature.name;
     if (deep) {
       base.vertices = {};
       for (const vkey in node.vertices) base.vertices[vkey] = node.vertices[vkey].slice();
@@ -206,6 +208,19 @@ export function describeNode(node: any, deep = false): any {
         base.faces[fkey] = { vertices: face.vertices.slice(), uv, texture: face.getTexture()?.name ?? face.texture };
       }
     }
+  } else if (typeof ArmatureBone !== 'undefined' && node instanceof ArmatureBone) {
+    // origin is relative to the parent bone; head is where the bone sits in the model.
+    base.origin = node.origin.slice();
+    base.head = node.getWorldCenter().toArray().map((c: number) => Math.round(c * 1000) / 1000);
+    base.rotation = node.rotation.slice();
+    base.length = node.length;
+    if (node.connected) base.connected = true;
+    base.weighted_vertices = Object.keys(node.vertex_weights || {}).length;
+    if (node.children?.length) base.children = node.children.length;
+  } else if (typeof Armature !== 'undefined' && node instanceof Armature) {
+    base.bones = node.getAllBones().length;
+    base.meshes = node.children.filter((c: any) => c instanceof Mesh).map((c: any) => c.name);
+    base.children = node.children.length;
   } else if (typeof BoundingBox !== 'undefined' && node instanceof BoundingBox) {
     base.from = node.from.slice();
     base.to = node.to.slice();
@@ -246,6 +261,10 @@ export function featureSupport(): Record<string, boolean> {
     generic_bounding_boxes: has(() => Formats.free?.bounding_boxes),
     gltf_merge_armature: has(() => Codecs.gltf.export_options?.merge_armature),
     force_translucent_textures: has(() => Texture.properties.force_translucent),
+    armature_ik: has(() => ArmatureBone && NullObject.properties.ik_pole),
+    auto_vertex_weights: has(() => BarItems.calculate_vertex_weights),
+    pbr_materials: has(() => Formats.free?.pbr),
+    molang_format_flag: has(() => ModelFormat.properties.molang),
   };
 }
 

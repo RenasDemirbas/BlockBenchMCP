@@ -3,6 +3,7 @@
 // images, including 5.2's 3D "plane" images placed in the scene.
 import { register, fail, requireProject } from '../registry';
 import { vec3 } from '../util';
+import { describeVideo, applyVideoControls } from './refvideo';
 
 // ───────────────────────────── reference models ─────────────────────────────
 
@@ -114,6 +115,7 @@ function describeReferenceImage(ref: any): any {
     out.size = ref.size.slice();
     if (ref.view_mode === 'blueprint') out.attached_side = ref.attached_side;
   }
+  out.video = describeVideo(ref);
   return out;
 }
 
@@ -170,7 +172,9 @@ register('reference_images', async (params) => {
     const view_mode = def.view_mode || (wantsPlane(def) ? 'plane' : 'flat_image');
     const ref = new ReferenceImage({
       source: def.path,
-      name: def.name || PathModule.basename(def.path),
+      // Blockbench tells videos from images by the NAME's extension, so a custom
+      // name goes on afterwards (applyReferenceImageProps) or a video loads as an image.
+      name: PathModule.basename(def.path),
       view_mode,
       layer: def.layer || 'background',
     });
@@ -185,6 +189,7 @@ register('reference_images', async (params) => {
     if (!loaded) warnings.push(`"${ref.name}" did not load — check the path: ${def.path}`);
     if (def.plane_size != null && !Array.isArray(def.plane_size)) ref.update();
     ref.save();
+    await applyVideoControls(ref, def.video);
     log.push(`added "${ref.name}" (${ref.view_mode})`);
   }
 
@@ -193,6 +198,7 @@ register('reference_images', async (params) => {
     if (wantsPlane(def) && !planesSupported) fail(`3D plane reference images need Blockbench 5.2 or newer (this is ${Blockbench.version}).`);
     applyReferenceImageProps(ref, def);
     ref.update().save();
+    await applyVideoControls(ref, def.video);
     log.push(`updated "${ref.name}"`);
   }
 

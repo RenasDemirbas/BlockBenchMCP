@@ -1,21 +1,11 @@
 // add_loft: build a limb/tube/barrel mesh from cross-section rings along a
-// path. transform_mesh: deform mesh vertices (taper, bend, twist, scale,
-// rotate, move, smooth, jitter) — the shaping half of box modeling.
+// path. Deforming existing meshes (transform_mesh) lives in ./meshdeform.
 import { register, fail, requireProject, getHandler } from '../registry';
-import { resolveNode, refreshElements, hash01 } from '../util';
 import { P3, norm3, dot3, cross3, polygonNormal } from '../surface';
-import { resolveSelection, relax } from './meshedit';
 
 const sub = (a: P3, b: P3): P3 => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
 const add = (a: P3, b: P3): P3 => [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
 const mul = (a: P3, s: number): P3 => [a[0] * s, a[1] * s, a[2] * s];
-
-/** Rotate v around unit axis k by angle (rad) — Rodrigues. */
-function rotateAround(v: P3, k: P3, ang: number): P3 {
-  const c = Math.cos(ang), s = Math.sin(ang);
-  const kv = cross3(k, v), kd = dot3(k, v);
-  return [v[0] * c + kv[0] * s + k[0] * kd * (1 - c), v[1] * c + kv[1] * s + k[1] * kd * (1 - c), v[2] * c + kv[2] * s + k[2] * kd * (1 - c)];
-}
 
 register('add_loft', (params) => {
   requireProject();
@@ -112,139 +102,4 @@ register('add_loft', (params) => {
       faces,
     }],
   });
-});
-
-// ───────────────────────────── transform_mesh ─────────────────────────────
-
-const AX: Record<string, number> = { x: 0, y: 1, z: 2 };
-
-register('transform_mesh', (params) => {
-  requireProject();
-  const ids: string[] = Array.isArray(params.meshes) ? params.meshes : [params.mesh];
-  if (!ids.length || ids[0] == null) fail('Pass "mesh" (or "meshes": [...]).');
-  const meshes = ids.map((id) => {
-    const n = resolveNode(id);
-    if (!(n instanceof Mesh)) fail(`"${id}" is a ${n.type}, not a mesh.`);
-    return n;
-  });
-  const ops: any[] = Array.isArray(params.ops) ? params.ops : [];
-  if (!ops.length) fail('Pass "ops": [{type: taper|bend|twist|scale|rotate|move|smooth|jitter, ...}].');
-
-  Undo.initEdit({ elements: meshes });
-  const report: any[] = [];
-  try {
-    for (const mesh of meshes) {
-      const sel = resolveSelection(mesh, params.select, null, 'select');
-      const keys = sel.vertices.length ? sel.vertices : Object.keys(mesh.vertices);
-      const get = (k: string) => mesh.vertices[k] as P3;
-      ops.forEach((op, i) => {
-        const label = `ops[${i}] (${op.type})`;
-        // Selection bounds are recomputed per op: earlier ops move things.
-        const lo: P3 = [Infinity, Infinity, Infinity], hi: P3 = [-Infinity, -Infinity, -Infinity];
-        for (const k of keys) for (let j = 0; j < 3; j++) { lo[j] = Math.min(lo[j], get(k)[j]); hi[j] = Math.max(hi[j], get(k)[j]); }
-        const center: P3 = [(lo[0] + hi[0]) / 2, (lo[1] + hi[1]) / 2, (lo[2] + hi[2]) / 2];
-        const pivot: P3 = Array.isArray(op.pivot) ? op.pivot.map(Number) as P3 : center;
-        const axis = AX[op.axis ?? 'y'];
-        if (axis === undefined) fail(`${label}: axis must be x, y or z.`);
-        const others = [0, 1, 2].filter((j) => j !== axis);
-        const span = hi[axis] - lo[axis];
-        // Where along the axis a vertex is, 0 at "from" (default: the low end).
-        const reverse = op.from === 'max';
-        const tOf = (p: P3) => span < 1e-9 ? 0 : (reverse ? (hi[axis] - p[axis]) : (p[axis] - lo[axis])) / span;
-
-        switch (op.type) {
-          case 'move': {
-            const o = (op.offset || [0, 0, 0]).map(Number);
-            for (const k of keys) mesh.vertices[k] = add(get(k), o as P3);
-            break;
-          }
-          case 'scale': {
-            const f: P3 = typeof op.factor === 'number' ? [op.factor, op.factor, op.factor] : (op.factor || [1, 1, 1]).map(Number);
-            for (const k of keys) { const p = get(k); mesh.vertices[k] = [0, 1, 2].map((j) => pivot[j] + (p[j] - pivot[j]) * f[j]) as P3; }
-            break;
-          }
-          case 'rotate': {
-            const r = (op.angles || [0, 0, 0]).map((d: number) => (d * Math.PI) / 180);
-            const e = new THREE.Euler(r[0], r[1], r[2], 'ZYX');
-            const v = new THREE.Vector3();
-            for (const k of keys) {
-              const p = get(k);
-              v.set(p[0] - pivot[0], p[1] - pivot[1], p[2] - pivot[2]).applyEuler(e);
-              mesh.vertices[k] = [v.x + pivot[0], v.y + pivot[1], v.z + pivot[2]];
-            }
-            break;
-          }
-          case 'taper': {
-            // Scale the cross-section linearly along the axis: 1 at the start → factor at the end.
-            const end = op.factor ?? 0.5;
-            const endV = Array.isArray(end) ? end.map(Number) : [end, end];
-            const start = op.start ?? 1;
-            const startV = Array.isArray(start) ? start.map(Number) : [start, start];
-            for (const k of keys) {
-              const p = get(k).slice() as P3;
-              const t = tOf(p);
-              others.forEach((j, n) => { const s = startV[n] + (endV[n] - startV[n]) * t; p[j] = pivot[j] + (p[j] - pivot[j]) * s; });
-              mesh.vertices[k] = p;
-            }
-            break;
-          }
-          case 'twist': {
-            const total = ((op.angle ?? 45) * Math.PI) / 180;
-            const k3: P3 = [0, 0, 0]; k3[axis] = 1;
-            for (const k of keys) {
-              const p = get(k);
-              const rel = sub(p, pivot); rel[axis] = 0;
-              const r = rotateAround(rel, k3, total * tOf(p));
-              const out = add(r, pivot); out[axis] = p[axis];
-              mesh.vertices[k] = out;
-            }
-            break;
-          }
-          case 'bend': {
-            // Curl the selection along "axis" toward "toward" by "angle" over its length.
-            const theta = ((op.angle ?? 45) * Math.PI) / 180;
-            const tw = op.toward ?? (axis === 1 ? 'z' : 'y');
-            const sign = String(tw).startsWith('-') ? -1 : 1;
-            const b = AX[String(tw).replace(/^[-+]/, '')];
-            if (b === undefined || b === axis) fail(`${label}: "toward" must be another axis (x, y, z, optionally "-z" etc.).`);
-            if (Math.abs(theta) < 1e-6 || span < 1e-9) break;
-            const R = span / theta;
-            const base = reverse ? hi[axis] : lo[axis];
-            const dir = reverse ? -1 : 1;
-            for (const k of keys) {
-              const p = get(k).slice() as P3;
-              const u = (p[axis] - base) * dir;
-              const w = (p[b] - pivot[b]) * sign;
-              const phi = u / R;
-              p[axis] = base + dir * (R - w) * Math.sin(phi);
-              p[b] = pivot[b] + sign * (R - (R - w) * Math.cos(phi));
-              mesh.vertices[k] = p;
-            }
-            break;
-          }
-          case 'smooth':
-            relax(mesh, keys, Math.max(0, Math.min(1, op.factor ?? 0.5)), Math.max(1, Math.min(20, Math.round(op.iterations ?? 1))));
-            break;
-          case 'jitter': {
-            // Seeded hand-made wobble — breaks up the too-perfect primitive look.
-            const amt = op.amount ?? 0.3, seed = op.seed ?? 1;
-            keys.forEach((k, n) => {
-              const p = get(k);
-              mesh.vertices[k] = [0, 1, 2].map((j) => p[j] + (hash01(n, j, seed) * 2 - 1) * amt) as P3;
-            });
-            break;
-          }
-          default:
-            fail(`${label}: unknown type. Valid: taper, bend, twist, scale, rotate, move, smooth, jitter.`);
-        }
-      });
-      report.push({ mesh: mesh.name, vertices_moved: keys.length });
-    }
-  } catch (err) {
-    Undo.cancelEdit(true);
-    throw err;
-  }
-  refreshElements(meshes, { geometry: true, uv: true, faces: true });
-  Undo.finishEdit('MCP: Transform mesh', { elements: meshes });
-  return { transformed: report, ops: ops.map((o) => o.type) };
 });
