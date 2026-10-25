@@ -11,10 +11,10 @@ model, unwraps and paints it, adds bones and animations, checks its own work wit
 exports to any format Blockbench supports. Every step lands in Blockbench's undo history, so
 `Ctrl+Z` takes back anything you don't like.
 
-[![Release](https://img.shields.io/github/v/release/RenasDemirbas/BlockBenchMCP?color=0F8F7E)](https://github.com/RenasDemirbas/BlockBenchMCP/releases/latest)
-[![License: GPL-3.0-or-later](https://img.shields.io/badge/license-GPL--3.0--or--later-D97B0F.svg)](LICENSE)
+[![Release](https://img.shields.io/github/v/release/RenasDemirbas/BlockBenchMCP?color=6464E0)](https://github.com/RenasDemirbas/BlockBenchMCP/releases/latest)
+[![License: GPL-3.0-or-later](https://img.shields.io/badge/license-GPL--3.0--or--later-F59B23.svg)](LICENSE)
 ![Blockbench 5.2](https://img.shields.io/badge/Blockbench-5.2-1e93d6)
-![Tools](https://img.shields.io/badge/MCP%20tools-74-0F8F7E)
+![Tools](https://img.shields.io/badge/MCP%20tools-74-6464E0)
 ![Node 18+](https://img.shields.io/badge/node-18%2B-5fa04e)
 
 **[Install](#install)** · **[What you get](#what-you-get)** · **[Workflows](#workflows)** ·

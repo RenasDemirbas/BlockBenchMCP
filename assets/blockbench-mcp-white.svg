@@ -1,9 +1,10 @@
-<svg fill="#ffffff" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256" role="img" aria-labelledby="title"><title>Blockbench MCP</title>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256" role="img" aria-labelledby="title">
   <title id="title">Blockbench MCP logo</title>
-  <!-- One block on a 4x4 grid of 48-unit cells, split by a three-step seam into two congruent
-       pieces 10 units apart: the assistant (teal) and Blockbench (orange) fit into one model. -->
+  <!-- Isometric block (edge 84) and a four-point spark at its upper right: the model and the assistant that builds it. One colour: faces separated by real gaps. -->
   <g id="symbol">
-    <path fill="#ffffff" d="M27 27 H171 V75 H123 V171 H75 V219 H27 Z"/>
-    <path fill="#ffffff" d="M229 229 H85 V181 H133 V85 H181 V37 H229 Z"/>
+    <path fill="#FFFFFF" d="M99.40 63.85 L168.95 104.00 L99.40 144.15 L29.85 104.00 Z"/>
+    <path fill="#FFFFFF" d="M28.25 106.77 L97.80 146.92 L97.80 227.23 L28.25 187.08 Z"/>
+    <path fill="#FFFFFF" d="M101.00 146.92 L170.55 106.77 L170.55 187.08 L101.00 227.23 Z"/>
+    <path fill="#FFFFFF" d="M193.40 26.00 Q197.00 58.40 229.40 62.00 Q197.00 65.60 193.40 98.00 Q189.80 65.60 157.40 62.00 Q189.80 58.40 193.40 26.00 Z"/>
   </g>
 </svg>

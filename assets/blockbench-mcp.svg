@@ -1,9 +1,10 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256" role="img" aria-labelledby="title">
   <title id="title">Blockbench MCP logo</title>
-  <!-- One block on a 4x4 grid of 48-unit cells, split by a three-step seam into two congruent
-       pieces 10 units apart: the assistant (teal) and Blockbench (orange) fit into one model. -->
+  <!-- Isometric block (edge 84) and a four-point spark at its upper right: the model and the assistant that builds it. -->
   <g id="symbol">
-    <path fill="#0F8F7E" d="M27 27 H171 V75 H123 V171 H75 V219 H27 Z"/>
-    <path fill="#D97B0F" d="M229 229 H85 V181 H133 V85 H181 V37 H229 Z"/>
+    <path fill="#9C9CFF" d="M99.40 62.00 L172.15 104.00 L99.40 146.00 L26.65 104.00 Z"/>
+    <path fill="#6464E0" d="M26.65 104.00 L99.40 146.00 L99.40 230.00 L26.65 188.00 Z"/>
+    <path fill="#4343B5" d="M99.40 146.00 L172.15 104.00 L172.15 188.00 L99.40 230.00 Z"/>
+    <path fill="#F59B23" d="M193.40 26.00 Q197.00 58.40 229.40 62.00 Q197.00 65.60 193.40 98.00 Q189.80 65.60 157.40 62.00 Q189.80 58.40 193.40 26.00 Z"/>
   </g>
 </svg>

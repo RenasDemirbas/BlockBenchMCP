@@ -1,8 +1,10 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256" role="img" aria-labelledby="title">
   <title id="title">Blockbench MCP logo (small sizes)</title>
-  <!-- Small-size cut: the seam widens to 20 units so it stays open at 16-32 px. -->
+  <!-- Small-size cut: larger spark, tucked closer to the block. -->
   <g id="symbol">
-    <path fill="#0F8F7E" d="M22 22 H166 V70 H118 V166 H70 V214 H22 Z"/>
-    <path fill="#D97B0F" d="M234 234 H90 V186 H138 V90 H186 V42 H234 Z"/>
+    <path fill="#9C9CFF" d="M96.25 64.00 L170.73 107.00 L96.25 150.00 L21.77 107.00 Z"/>
+    <path fill="#6464E0" d="M21.77 107.00 L96.25 150.00 L96.25 236.00 L21.77 193.00 Z"/>
+    <path fill="#4343B5" d="M96.25 150.00 L170.73 107.00 L170.73 193.00 L96.25 236.00 Z"/>
+    <path fill="#F59B23" d="M188.25 14.00 Q193.45 54.80 234.25 60.00 Q193.45 65.20 188.25 106.00 Q183.05 65.20 142.25 60.00 Q183.05 54.80 188.25 14.00 Z"/>
   </g>
 </svg>
