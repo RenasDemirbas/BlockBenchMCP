@@ -1,5 +1,42 @@
 # Changelog
 
+## 1.10.0 — Skinning, materials and a new look
+
+- New tool `add_armature`: builds an armature for skinned meshes ("free" format). Bones are given by
+  head and tail points. Meshes passed in `meshes` are attached and skinned right away.
+- New tool `vertex_weights` with the actions `auto`, `set`, `smooth`, `normalize`, `clear` and
+  `inspect`. `auto` runs Blockbench's Calculate Vertex Weights, then re-solves from distance
+  envelopes every vertex it left unweighted or gave to a bone far away (a tube's cap centre used to
+  follow the wrong limb). It can also use envelopes only. Weight math always runs on the rest pose.
+- `add_ik_controllers`: target and source can be armature bones. Without a source, an armature chain
+  starts at the armature's top bone.
+- `transform_mesh` `falloff`: proportional editing. Each op except `smooth` also moves the
+  vertices within `radius` of the selection, less the further away they are. Curves: smooth, linear,
+  sharp, root, constant. Distance is measured in a straight line or along the mesh edges. The
+  deformers moved to their own modules; without `falloff` the results are the same as before.
+- New tool `generate_pbr_map`: height, normal and MER (metalness, emissive, roughness) maps from a
+  colour texture, filed into its material. Built-in presets, plus the presets saved in Blockbench.
+  Re-running a MER channel leaves the other two channels as they are.
+- New tool `blend_seams`: softens colour breaks across face edges, UV seams and part joints in world
+  space. It can write into its own layer.
+- `capture_screenshot` `view_mode`: render as `weighted_bone_colors`, `material`, `normal`,
+  `wireframe` and so on. The user's view mode is restored afterwards.
+- `reference_images`: `video` controls (time, playing, muted, volume) and `sync_to_timeline`. The
+  listing shows each video's duration, time and state.
+- `edit_keyframes` `relative_to_playhead` (`before` / `after`) with an optional `playhead` time.
+- `project_file` open/import `resolve_parents`: a Java child model opens with its whole parent chain
+  merged (default) or alone, without the dialog that used to block the call.
+- `list_formats` / `get_project_info`: new `pbr` and `molang` capability flags. `get_status`
+  features: `armature_ik`, `auto_vertex_weights`, `pbr_materials`, `molang_format_flag`.
+- `list_outline` lists armatures and bones with their children. `get_element` shows a bone's head
+  in model space and how many vertices it weights, and a mesh's armature.
+- Fix: a video reference image added with a custom `name` (no file extension) loaded as an image.
+- Fix: screenshots of posed skinned meshes are framed on the posed shape, not the rest pose.
+- New test: `scripts/verify-v52-additions.mjs` (45 checks).
+- New logo (`assets/`) and a reorganized README.
+- License changed from MIT to GPL-3.0-or-later.
+- `docs/superpowers` design notes removed from the repository.
+
 ## 1.9.0.1 — Detached parts
 
 - `validate_model` finds detached parts: a cube or mesh that does not touch the main body through its

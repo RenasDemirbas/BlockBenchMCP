@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256" role="img" aria-labelledby="title">
+  <title id="title">Blockbench MCP logo (small sizes)</title>
+  <!-- Small-size cut: the seam widens to 20 units so it stays open at 16-32 px. -->
+  <g id="symbol">
+    <path fill="#0F8F7E" d="M22 22 H166 V70 H118 V166 H70 V214 H22 Z"/>
+    <path fill="#D97B0F" d="M234 234 H90 V186 H138 V90 H186 V42 H234 Z"/>
+  </g>
+</svg>
