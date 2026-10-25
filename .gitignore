@@ -7,3 +7,9 @@ e2e-output/
 Thumbs.db
 .env
 .env.*
+
+# Assistant tooling (kept out of the repository)
+CLAUDE.md
+CLAUDE.local.md
+.claude/
+docs/superpowers/
