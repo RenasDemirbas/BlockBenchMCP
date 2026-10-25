@@ -11,11 +11,15 @@ model, unwraps and paints it, adds bones and animations, checks its own work wit
 exports to any format Blockbench supports. Every step lands in Blockbench's undo history, so
 `Ctrl+Z` takes back anything you don't like.
 
+[![CI](https://github.com/RenasDemirbas/BlockBenchMCP/actions/workflows/ci.yml/badge.svg)](https://github.com/RenasDemirbas/BlockBenchMCP/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/RenasDemirbas/BlockBenchMCP?color=6464E0)](https://github.com/RenasDemirbas/BlockBenchMCP/releases/latest)
 [![License: GPL-3.0-or-later](https://img.shields.io/badge/license-GPL--3.0--or--later-F59B23.svg)](LICENSE)
 ![Blockbench 5.2](https://img.shields.io/badge/Blockbench-5.2-1e93d6)
 ![Tools](https://img.shields.io/badge/MCP%20tools-74-6464E0)
 ![Node 18+](https://img.shields.io/badge/node-18%2B-5fa04e)
+
+**[Documentation](https://renasdemirbas.github.io/BlockBenchMCP/)**: install, workflows, recipes and
+the full tool reference.
 
 **[Install](#install)** · **[What you get](#what-you-get)** · **[Workflows](#workflows)** ·
 **[Tools](#tools)** · **[Changelog](CHANGELOG.md)**
@@ -203,7 +207,8 @@ Groups stay the right choice for blocky Minecraft rigs, where parts move rigidly
 
 ## Tools
 
-74 tools. Each one's parameters are described in its schema, which the assistant reads on its own.
+74 tools. Each one's parameters are described in its schema, which the assistant reads on its own;
+the [tool reference](https://renasdemirbas.github.io/BlockBenchMCP/docs/tools.html) shows them all.
 
 | Area | Tools |
 |---|---|
@@ -369,8 +374,11 @@ Plugin.register('my_plugin', {
 
 ## Development
 
+Contributions are welcome: see [CONTRIBUTING.md](CONTRIBUTING.md), and [SECURITY.md](SECURITY.md)
+for reporting a vulnerability privately.
+
 ```bash
-npm run build && npm run typecheck
+npm run build && npm run typecheck                   # npm run build:release bundles the server + its licenses
 node scripts/call-tool.mjs eval_code '{"code":"setTimeout(() => Plugins.devReload(), 300); \"ok\"","undo":false}'   # reload the plugin
 node scripts/call-tool.mjs pixel_art '{"action":"render","view":"isometric","size":64}' --images e2e-output/tmp  # call any tool
 ```

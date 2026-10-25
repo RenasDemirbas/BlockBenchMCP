@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.10.1 — Licenses, plugin identity and a documentation site
+
+- The plugin shows the Blockbench MCP logo and "Renas Demirbas" as its author in Blockbench's plugin
+  list. The logo is embedded in the plugin file; no separate icon file is needed.
+- Both built files start with a copyright and `SPDX-License-Identifier: GPL-3.0-or-later` notice.
+- Releases include `LICENSE` and `THIRD_PARTY_LICENSES.txt`, with the license of every npm package
+  bundled into `mcp-server.js` (MIT, ISC and BSD require their notices to travel with the code).
+  `npm run build:release` writes both; the build moved to `scripts/build.mjs`.
+- Documentation site on GitHub Pages: getting started, workflows, recipes, a tool reference generated
+  from the server's schemas, the plugin API and troubleshooting.
+- `CONTRIBUTING.md`, `SECURITY.md`, `CODE_OF_CONDUCT.md`, issue and pull request templates, and a CI
+  workflow (typecheck, release build, protocol and origin tests).
+
 ## 1.10.0 — Skinning, materials and a new look
 
 - New tool `add_armature`: builds an armature for skinned meshes ("free" format). Bones are given by

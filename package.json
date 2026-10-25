@@ -1,6 +1,6 @@
 {
   "name": "blockbench-mcp",
-  "version": "1.10.0",
+  "version": "1.10.1",
   "description": "MCP server and Blockbench plugin: modeling, texturing, rigging and animation in Blockbench through an AI assistant",
   "license": "GPL-3.0-or-later",
   "private": true,
