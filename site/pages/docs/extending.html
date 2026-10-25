@@ -1,0 +1,57 @@
+<!--meta {"title": "Adding tools", "description": "Register your own MCP tools from another Blockbench plugin through window.BlockbenchMCP, or add a built-in tool to Blockbench MCP.", "layout": "docs"} -->
+<h1>Adding tools</h1>
+<p class="intro">Another Blockbench plugin can give the assistant its own tools, with no server restart. And if you want a tool in Blockbench MCP itself, here is how the code is laid out.</p>
+
+<h2 id="plugin-api">From your own Blockbench plugin</h2>
+<p>Register through <code>window.BlockbenchMCP</code>. Listen for <code>blockbench_mcp_ready</code> too: it covers a plugin that loads before this one and re-adds your tool when the bridge plugin reloads.</p>
+<pre><code>let tool;
+function addTools() {
+  tool = BlockbenchMCP.registerTool({
+    name: 'count_cubes',
+    title: 'Count cubes',
+    description: 'Count the cubes in the open project, optionally only those whose name contains a filter.',
+    inputSchema: { type: 'object', properties: { filter: { type: 'string' } } }, // JSON Schema
+    annotations: { readOnlyHint: true },
+  }, ({ filter }) => ({ count: Cube.all.filter((c) => !filter || c.name.includes(filter)).length }));
+}
+
+Plugin.register('my_plugin', {
+  onload() {
+    if (window.BlockbenchMCP) addTools();
+    window.addEventListener('blockbench_mcp_ready', addTools);
+  },
+  onunload() {
+    tool?.delete();
+    window.removeEventListener('blockbench_mcp_ready', addTools);
+  },
+});</code></pre>
+
+<div class="table-wrap"><table>
+  <tr><th>Field</th><th>Rules</th></tr>
+  <tr><td><code>name</code></td><td>1–64 characters of <code>A-Z a-z 0-9 _ - .</code>. A name that a built-in tool or another plugin already uses is refused.</td></tr>
+  <tr><td><code>description</code></td><td>Required. It is all the assistant reads to decide when to call the tool, so say what it does and what it returns.</td></tr>
+  <tr><td><code>inputSchema</code></td><td>Optional JSON Schema with <code>type: "object"</code>. Arguments are not validated against it; check them in the handler.</td></tr>
+  <tr><td>handler</td><td>May be <code>async</code>. A string comes back as text, anything else as JSON. Put PNG data URLs in <code>__image</code> (or an array in <code>__images</code>) to return pictures. A thrown error becomes the tool's error message. Calls time out after 120 seconds.</td></tr>
+  <tr><td>return value</td><td><code>registerTool</code> returns an object whose <code>delete()</code> removes the tool again.</td></tr>
+</table></div>
+
+<h2 id="built-in">A built-in tool</h2>
+<p>The code is split by layer, so a new tool touches three places:</p>
+<div class="table-wrap"><table>
+  <tr><th>Layer</th><th>Folder</th><th>Holds</th></tr>
+  <tr><td>Schema</td><td><code>server/src/tools/</code></td><td>The tool's name, description and parameters. It forwards to a plugin command of the same name.</td></tr>
+  <tr><td>Handler</td><td><code>plugin/src/handlers/</code></td><td>The Blockbench side: read and write Blockbench state, record undo, fail with a message that says how to recover.</td></tr>
+  <tr><td>Math</td><td><code>plugin/src/rig/</code>, <code>mesh/</code>, <code>texturing/</code></td><td>Pure functions with no Blockbench globals: skinning, deformers, PBR maps, seam blending.</td></tr>
+</table></div>
+<p>Then add checks to a <code>scripts/verify-*.mjs</code> script, which runs against a live Blockbench, and list the tool in the README and the changelog. The full checklist is in <a href="https://github.com/RenasDemirbas/BlockBenchMCP/blob/main/CONTRIBUTING.md">CONTRIBUTING.md</a>.</p>
+
+<h3>Trying it without restarting your client</h3>
+<p>An MCP client fixes its tool list when it starts the server. <code>scripts/call-tool.mjs</code> starts a fresh server for one call instead:</p>
+<pre><code>npm run build
+node scripts/call-tool.mjs eval_code '{"code":"setTimeout(() =&gt; Plugins.devReload(), 300); \"ok\"","undo":false}'
+node scripts/call-tool.mjs my_new_tool '{"some":"argument"}' --images e2e-output/tmp</code></pre>
+
+<div class="pager">
+  <a href="tools.html"><small>Previous</small>← Tools</a>
+  <a href="troubleshooting.html"><small>Next</small>Troubleshooting &amp; security →</a>
+</div>

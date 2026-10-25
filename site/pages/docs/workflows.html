@@ -1,0 +1,65 @@
+<!--meta {"title": "Workflows", "description": "Step-by-step ways to build Minecraft-style entities, low-poly painted characters, skinned meshes and pixel-art sprites with Blockbench MCP.", "layout": "docs"} -->
+<h1>Workflows</h1>
+<p class="intro">The order that works for each kind of model, and what to ask for at each step. Building in steps and checking a screenshot after each one is faster than asking for everything at once.</p>
+
+<h2 id="entity">Minecraft-style entity</h2>
+<p>Cube models in the Bedrock entity (or Java, or generic) format, animated through group bones.</p>
+<ol>
+  <li><b>Project and skeleton.</b> <code>create_project</code>, then the bone tree with <code>add_groups</code>: <code>body › head</code>, <code>body › leg_fl</code> and so on. Animations move these groups, so build them first.</li>
+  <li><b>Geometry.</b> <code>add_cubes</code> into the groups. <code>mirror: true</code> creates the opposite limb and renames it left↔right. <code>add_planes</code> for fur and leaf cards.</li>
+  <li><b>Check.</b> <code>capture_multi_view</code> from the front, side and top. Fix proportions now; moving geometry after painting breaks the UVs.</li>
+  <li><b>Texture.</b> <code>generate_texture_template</code> first, then <code>paint_faces</code> and <code>paint_texture</code>. Without a template many faces share one UV area and painting one repaints the others.</li>
+  <li><b>Animate.</b> <code>create_animation</code>, <code>set_keyframes</code>, and <code>mirror_keyframes</code> with a half-cycle <code>phase_offset</code> for walk cycles. <code>validate_model</code> then finds parts that intersect or float loose during the animation; <code>query_geometry</code> checks that feet touch the ground.</li>
+  <li><b>Export.</b> <code>project_file</code> with <code>export</code> (<code>bedrock_geo</code>) and <code>export_animations</code>.</li>
+</ol>
+<div class="prompt">Make a wolf in the Bedrock entity format. Build only the skeleton and the shape in grey cubes first and show me three views. If I like it, texture it and add a walk cycle.</div>
+
+<h2 id="lowpoly">Low-poly, hand-painted character</h2>
+<p>PS1-style characters with painted textures, built from meshes in the generic <code>free</code> format.</p>
+<ol>
+  <li><b>Reference.</b> <code>compare_reference</code> against your picture from the same angle. It reports silhouette overlap (IoU) and, for each height band, how many units wider or narrower the model is.</li>
+  <li><b>Blockout.</b> <code>add_loft</code> builds arms, legs, trousers and torso from rings: give each ring a centre and a size and you get a tapering, bending limb. A cylinder from <code>add_mesh_primitive</code> makes a hat brim; a plane and <code>edit_mesh</code> solidify make a cape.</li>
+  <li><b>Shape.</b> <code>transform_mesh</code> tapers, bends and twists; add <code>falloff</code> so a pulled nose or a bent knee drags the surface around it. <code>edit_mesh</code> extrudes, insets, loop-cuts and bevels, with <code>select: "previous"</code> chaining steps in one call. Run <code>compare_reference</code> again after each change.</li>
+  <li><b>Unwrap.</b> <code>unwrap_mesh</code> with <code>pixel_density</code> 32–64 and <code>density_scale: {"head": 2}</code>. Limbs come out as single strips; existing paint moves to the new layout.</li>
+  <li><b>Flat colours.</b> <code>palette</code> <code>ramp</code> for colour ramps, <code>paint_faces</code> to fill. On meshes, <code>faces: ["up"]</code> picks the faces that point up. <code>project_reference</code> can paint the reference picture on as a starting point.</li>
+  <li><b>Blend and bake.</b> <code>blend_seams</code> softens the colour breaks where parts meet; <code>bake_texture</code> with <code>layer: "shading"</code> paints light, ambient occlusion and edge highlights as hue-shifted pixel-art steps on their own layer.</li>
+  <li><b>Clean up.</b> <code>palette</code> <code>quantize</code> snaps stray colours to the palette.</li>
+</ol>
+<div class="callout">Record the build: <code>record_build</code> <code>start</code> at the beginning turns every edit into a frame, and <code>stop</code> writes a part-by-part GIF.</div>
+
+<h2 id="skinned">Skinned mesh with an armature</h2>
+<p>One continuous mesh that bends at the joints, such as a tentacle, a tail, a cape or a low-poly character. Use groups instead for blocky rigs where parts move rigidly.</p>
+<ol>
+  <li>Build the mesh in the <code>free</code> format.</li>
+  <li><code>add_armature</code> with bones given as <code>head</code> and <code>tail</code> points and <code>meshes</code> to attach. It skins them in the same call: Blockbench's own solver runs first, then any vertex it leaves out or hands to a bone far away is re-solved by distance.</li>
+  <li><code>capture_screenshot</code> with <code>view_mode: "weighted_bone_colors"</code> shows which bone owns which vertex.</li>
+  <li><code>vertex_weights</code> <code>smooth</code> with <code>near: {bone, distance}</code> softens a joint that creases; <code>set</code> paints a weight onto a selection; <code>inspect</code> lists vertices that follow no bone.</li>
+  <li>Pose the bones with <code>set_keyframes</code>, or drive a chain with <code>add_ik_controllers</code> (target and source are bone names).</li>
+  <li>Export with <code>project_file</code> <code>export</code> <code>glb</code> and <code>options: {armature: true}</code>.</li>
+</ol>
+<div class="prompt">Rig the tentacle mesh with five bones from the base to the tip, smooth the weights at the joints and make it wave. Export it as GLB.</div>
+
+<h2 id="pixelart">Pixel-art sprites for a 2D game</h2>
+<p><code>pixel_art</code> draws the model by pixel-art rules: scale snapped to texture pixels, no anti-aliasing, a few shading bands and a 1 px outline. It is not a shrunk screenshot.</p>
+<ul>
+  <li><b>Views:</b> <code>side</code>, <code>front</code>, <code>back</code>, <code>top</code>, <code>three_quarter</code>, <code>top_down</code>, <code>isometric</code> (2:1), <code>true_isometric</code>, or a free <code>yaw</code>/<code>pitch</code>.</li>
+  <li><b>Directions:</b> <code>directions: 8</code> for a rotation set; <code>mirror_directions: true</code> halves the work on symmetric models.</li>
+  <li><b>Style and palette:</b> <code>outlined</code>, <code>clean</code>, <code>minecraft</code>, <code>flat</code>; the model's own colours or <code>pico8</code>, <code>sweetie16</code>, <code>endesga32</code>, <code>db32</code>, with optional Bayer dithering.</li>
+  <li><b>Sheets:</b> <code>export_sheet</code> writes an animation as one PNG plus Aseprite JSON, with scale and the feet pivot fixed once so frames don't drift.</li>
+</ul>
+<div class="prompt">Render the slime's hop animation as an 8-direction isometric sprite sheet at 64 px with the pico8 palette, into my desktop.</div>
+
+<h2 id="tips">Tips that save a round trip</h2>
+<ul>
+  <li>Paint whole limbs: <code>target: {element: "leg_fl", faces: "all"}</code> covers every cube in a group; <code>"*"</code> is the whole model.</li>
+  <li>Gradients with <code>space: "world"</code> follow the model's height instead of restarting on every cube.</li>
+  <li>Keyframe values can be Molang, like <code>"math.sin(query.anim_time*360)*15"</code>. Times snap to the animation's FPS grid; <code>snap: false</code> keeps exact times.</li>
+  <li>Bones with a rest rotation add keyframe values on top of it; they are not absolute angles.</li>
+  <li>Bake IK with <code>bake_ik_animation</code> before exporting to Bedrock or Java, which have no IK.</li>
+  <li>A model that looks washed out or covered in a grid is usually Blockbench's <code>brightness</code> or <code>pixel_grid</code> setting, not the texture.</li>
+</ul>
+
+<div class="pager">
+  <a href="./"><small>Previous</small>← Getting started</a>
+  <a href="recipes.html"><small>Next</small>Recipes →</a>
+</div>

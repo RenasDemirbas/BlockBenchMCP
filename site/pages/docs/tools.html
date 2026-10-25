@@ -1,0 +1,16 @@
+<!--meta {"title": "Tools", "description": "Every Blockbench MCP tool with its description and parameters, generated from the server's own schemas.", "layout": "docs", "scripts": ["tools.js"]} -->
+<h1>Tools</h1>
+<p class="intro">Every tool, with the description and parameters the assistant sees. This page is generated from the server's schemas at build time, so it always matches the release (v{{version}}).</p>
+
+<div class="tool-filter">
+  <input id="tool-search" type="search" placeholder="Search tools and parameters…" autocomplete="off" aria-label="Search tools and parameters">
+  <select id="tool-area" aria-label="Area"><option value="">All areas</option></select>
+  <span id="tool-count" class="muted"></span>
+</div>
+<div id="tool-list"><p class="muted">Loading the tool list…</p></div>
+<noscript><p>This list needs JavaScript. The same information is in each tool's schema; see the <a href="https://github.com/RenasDemirbas/BlockBenchMCP#tools">README</a>.</p></noscript>
+
+<div class="pager">
+  <a href="recipes.html"><small>Previous</small>← Recipes</a>
+  <a href="extending.html"><small>Next</small>Adding tools →</a>
+</div>
