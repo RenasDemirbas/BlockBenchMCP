@@ -18,9 +18,6 @@ exports to any format Blockbench supports. Every step lands in Blockbench's undo
 ![Tools](https://img.shields.io/badge/MCP%20tools-74-6464E0)
 ![Node 18+](https://img.shields.io/badge/node-18%2B-5fa04e)
 
-**[Documentation](https://renasdemirbas.github.io/BlockBenchMCP/)**: install, workflows, recipes and
-the full tool reference.
-
 **[Install](#install)** · **[What you get](#what-you-get)** · **[Workflows](#workflows)** ·
 **[Tools](#tools)** · **[Changelog](CHANGELOG.md)**
 
@@ -207,8 +204,7 @@ Groups stay the right choice for blocky Minecraft rigs, where parts move rigidly
 
 ## Tools
 
-74 tools. Each one's parameters are described in its schema, which the assistant reads on its own;
-the [tool reference](https://renasdemirbas.github.io/BlockBenchMCP/docs/tools.html) shows them all.
+74 tools. Each one's parameters are described in its schema, which the assistant reads on its own.
 
 | Area | Tools |
 |---|---|

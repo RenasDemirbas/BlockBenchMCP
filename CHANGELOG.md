@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- The GitHub Pages documentation site is removed; the README is the documentation.
+
 ## 1.10.1 — Licenses, plugin identity and a documentation site
 
 - The plugin shows the Blockbench MCP logo and "Renas Demirbas" as its author in Blockbench's plugin

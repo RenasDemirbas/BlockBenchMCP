@@ -4,5 +4,5 @@ contact_links:
     url: https://github.com/RenasDemirbas/BlockBenchMCP/security/advisories/new
     about: Report vulnerabilities privately, not as a public issue.
   - name: Documentation
-    url: https://renasdemirbas.github.io/BlockBenchMCP/
-    about: Install guide, workflows and the full tool reference.
+    url: https://github.com/RenasDemirbas/BlockBenchMCP#readme
+    about: Install guide, workflows and the tool list.
