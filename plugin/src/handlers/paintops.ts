@@ -97,8 +97,10 @@ export function drawPaintOp(ctx: CanvasRenderingContext2D, op: any, map: (pt: nu
     }
   } else if (op.type === 'ellipse') {
     const [cx, cy] = px(op.center);
-    const rx = Math.max(0.5, op.radius?.[0] ?? op.radius ?? 4);
-    const ry = Math.max(0.5, op.radius?.[1] ?? op.radius ?? 4);
+    // Targeted ops use normalized 0-1 coordinates: scale the radius by the face rect too.
+    const sx = geo ? geo.rect[2] : 1, sy = geo ? geo.rect[3] : 1;
+    const rx = Math.max(0.5, (op.radius?.[0] ?? op.radius ?? (geo ? 0.25 : 4)) * sx);
+    const ry = Math.max(0.5, (op.radius?.[1] ?? op.radius ?? (geo ? 0.25 : 4)) * sy);
     for (let y = Math.floor(cy - ry); y <= Math.ceil(cy + ry); y++) {
       for (let x = Math.floor(cx - rx); x <= Math.ceil(cx + rx); x++) {
         const nx = (x + 0.5 - cx) / rx, ny = (y + 0.5 - cy) / ry;
