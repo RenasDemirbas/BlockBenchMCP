@@ -1,6 +1,6 @@
 # Changelog
 
-## 1.12.0 — Hytale models
+## 1.11.1.1 — Hytale models
 
 - Hytale support through the official Hytale Models plugin: `create_project` takes
   `hytale_character` and `hytale_prop` (and says how to install the plugin when it is missing),
