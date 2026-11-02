@@ -9,8 +9,8 @@ backports to older versions.
 
 | Version | Supported |
 | --- | --- |
-| 1.10.x (latest) | Yes |
-| 1.6.1 – 1.9.x | No, update |
+| 1.11.x (latest) | Yes |
+| 1.6.1 – 1.10.x | No, update |
 | 1.6.0 and older | **No, and unsafe:** any website could reach the bridge |
 
 ## Threat model

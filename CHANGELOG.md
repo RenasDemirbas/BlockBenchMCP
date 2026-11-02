@@ -1,7 +1,16 @@
 # Changelog
 
-## Unreleased
+## 1.11.0 — Smooth meshes
 
+- New tool `smooth_mesh` for smooth, professional meshes through the non-destructive modifiers of
+  the [BlockSmooth](https://github.com/RenasDemirbas/BlockSmooth) plugin: `add` / `update` /
+  `remove` / `move` Catmull-Clark subdivision and smooth-by-angle shading, `crease` and `sharp`
+  edges (explicit pairs, every edge over an angle, or the edit-mode selection), `apply` to bake the
+  subdivision, `describe` for the stack and face counts. `shading` switches Blockbench's own
+  flat / smooth mesh shading and needs no plugin.
+- `pixel_art` renders meshes smoothed by BlockSmooth correctly: the normal / depth and part-id passes
+  swap materials on the object that is actually drawn, not on the hidden picking cage.
+- `scripts/verify-blocksmooth.mjs` checks the tool against a live Blockbench.
 - The GitHub Pages documentation site is removed; the README is the documentation.
 
 ## 1.10.1 — Licenses, plugin identity and a documentation site
