@@ -15,7 +15,7 @@ exports to any format Blockbench supports. Every step lands in Blockbench's undo
 [![Release](https://img.shields.io/github/v/release/RenasDemirbas/BlockBenchMCP?color=6464E0)](https://github.com/RenasDemirbas/BlockBenchMCP/releases/latest)
 [![License: GPL-3.0-or-later](https://img.shields.io/badge/license-GPL--3.0--or--later-F59B23.svg)](LICENSE)
 ![Blockbench 5.2](https://img.shields.io/badge/Blockbench-5.2-1e93d6)
-![Tools](https://img.shields.io/badge/MCP%20tools-74-6464E0)
+![Tools](https://img.shields.io/badge/MCP%20tools-75-6464E0)
 ![Node 18+](https://img.shields.io/badge/node-18%2B-5fa04e)
 
 **[Install](#install)** · **[What you get](#what-you-get)** · **[Workflows](#workflows)** ·
@@ -178,6 +178,23 @@ OUT=C:/output/folder node scripts/examples/build-gunslinger.mjs
 </details>
 
 <details>
+<summary><b>Smooth, subdivided mesh</b></summary>
+
+Needs the [BlockSmooth](https://github.com/RenasDemirbas/BlockSmooth) plugin (`blocksmooth.js`) loaded next to the bridge plugin.
+
+1. Box-model a coarse cage with quads in the `free` format: a cube converted with `run_action`
+   `convert_to_mesh`, then `edit_mesh` extrude / inset / loop cut.
+2. `smooth_mesh {action: "add", type: "subdivision", levels: 2}`. The viewport, screenshots and pixel
+   art show the smooth surface; you keep editing the cage.
+3. `smooth_mesh {action: "crease", angle: 60}` keeps every hard edge of the cage sharp; lower `value`
+   (0.3-0.7) gives tight rounded bevels instead.
+4. `smooth_mesh {action: "add", type: "smooth_by_angle", angle: 30}` for crisp shading on flat panels.
+5. `project_file` `export` (OBJ, FBX, glTF/GLB, Collada, STL): the files contain the subdivided mesh at
+   `export_levels`; the `.bbmodel` keeps the editable cage.
+
+</details>
+
+<details>
 <summary><b>Skinned mesh (armature)</b></summary>
 
 1. Build one continuous mesh (`add_loft`, `edit_mesh`), in the `free` format.
@@ -204,7 +221,7 @@ Groups stay the right choice for blocky Minecraft rigs, where parts move rigidly
 
 ## Tools
 
-74 tools. Each one's parameters are described in its schema, which the assistant reads on its own.
+75 tools. Each one's parameters are described in its schema, which the assistant reads on its own.
 
 | Area | Tools |
 |---|---|
@@ -213,6 +230,7 @@ Groups stay the right choice for blocky Minecraft rigs, where parts move rigidly
 | Texture | `create_texture`, `generate_texture_template`, `list_textures`, `get_texture`, `import_texture`, `apply_texture`, `paint_texture`, `paint_faces`, `bake_texture`, `blend_seams`, `generate_pbr_map`, `palette`, `texture_layers`, `resize_texture`, `set_texture_resolution`, `delete_texture` |
 | UV | `unwrap_mesh`, `uv` (inspect, set_cube, set_mesh, auto) |
 | Animation | `create_animation`, `list_animations`, `get_animation`, `update_animation`, `delete_animation`, `set_keyframes`, `edit_keyframes`, `mirror_keyframes`, `add_effect_keyframes`, `apply_animation_preset`, `variable_placeholders`, `preview_animation`, `render_animation` |
+| Smoothing | `smooth_mesh` (describe, add, update, remove, move, crease, sharp, apply, shading) — needs the [BlockSmooth](https://github.com/RenasDemirbas/BlockSmooth) plugin, except `shading` |
 | Rigging | `add_ik_controllers`, `bake_ik_animation`, `add_armature`, `vertex_weights` (auto, set, smooth, normalize, clear, inspect) |
 | Checking | `validate_model`, `query_geometry`, `capture_screenshot`, `capture_multi_view`, `record_build` |
 | Reference | `compare_reference`, `project_reference`, `preview_models`, `reference_images` |
@@ -404,6 +422,7 @@ Run any of them with `node scripts/<name>`.
 | `verify-v52-features.mjs` | Blockbench 5.2 features | Blockbench 5.2 |
 | `verify-v52-additions.mjs` | Armatures and weights, armature IK, falloff, PBR maps, seam blending, playhead selection, molang flag, Java parent chains, video references, view modes | Blockbench 5.2, ffmpeg for the video check |
 | `verify-pixel-art.mjs` | Pixel-art output (PNG and JSON) | Open Blockbench |
+| `verify-blocksmooth.mjs` | `smooth_mesh`: modifiers, creases, viewport display, exports and cage restore, apply and undo | Open Blockbench with the BlockSmooth plugin |
 | `verify-lowpoly-tools.mjs` | Mesh painting, unwrap, edit / loft / transform, bake, palette, reference, recording; pick sections with `… paint,bake` | Open Blockbench, `REF_DIR` for the reference tests |
 | `verify-headless.mjs` | Headless launch, hidden-window tools and screenshots, `blockbench_window` | Windows, Blockbench closed |
 | `verify-hidden-window-timers.mjs` | Timers while the window is in the background | Minimized Blockbench |

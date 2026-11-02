@@ -8,6 +8,7 @@ import { registerTextureTools } from './textures';
 import { registerUvTools } from './uv';
 import { registerAnimationTools } from './animation';
 import { registerArmatureTools } from './armature';
+import { registerSmoothTools } from './smooth';
 import { registerMaterialTools } from './materials';
 import { registerDisplayTools } from './display';
 import { registerPixelArtTools } from './pixelart';
@@ -22,6 +23,7 @@ export function registerTools(server: McpServer) {
   registerUvTools(server);
   registerAnimationTools(server);
   registerArmatureTools(server);
+  registerSmoothTools(server);
   registerMaterialTools(server);
   registerDisplayTools(server);
   registerPixelArtTools(server);

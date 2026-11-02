@@ -6,6 +6,7 @@
 // instead of an average, so no blended "in-between" colours are invented and
 // thin geometry survives as long as it covers enough of the pixel.
 import { renderableElements, ViewBasis, FrameSpec, ViewBounds, buildOrthoCamera } from './camera';
+import { drawnObject } from '../blocksmooth';
 
 export interface PixelBuffers {
   width: number;
@@ -380,7 +381,7 @@ export function renderPixelFrame(basis: ViewBasis, frame: FrameSpec, bounds: Vie
     // Geometry: packed view-space normal + depth for every mesh in the sprite.
     const elements = renderableElements();
     try {
-      for (const el of elements) swapWith(el.mesh, (m) => geoMaterialFor(m, depthNear, depthFar));
+      for (const el of elements) swapWith(drawnObject(el), (m) => geoMaterialFor(m, depthNear, depthFar));
       for (const mesh of extraMeshes) swapWith(mesh, (m) => geoMaterialFor(m, depthNear, depthFar));
       renderInto(c, scene, camera, geo);
     } finally { restore(); }
@@ -402,8 +403,9 @@ export function renderPixelFrame(basis: ViewBasis, frame: FrameSpec, bounds: Vie
     try {
       for (const el of elements) {
         const id = idOf(partKeyOf(el));
-        swapWith(el.mesh, (m) => idMaterialFor(m, id));
-        hook(el.mesh, id);
+        const drawn = drawnObject(el);
+        swapWith(drawn, (m) => idMaterialFor(m, id));
+        hook(drawn, id);
       }
       let extraId = 1_000_000;
       for (const mesh of extraMeshes) {
