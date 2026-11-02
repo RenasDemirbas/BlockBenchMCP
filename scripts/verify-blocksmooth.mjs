@@ -8,6 +8,8 @@
 //     project is saved while an async export is still running
 //   * apply bakes the subdivision and is one undo step
 //   * the "shading" action and pixel-art rendering of a smoothed mesh
+//   * shared vertices in the viewport and in glTF (welded; never for skinned meshes),
+//     and re-sharing when an armature bend turns smooth-by-angle edges sharp
 //
 // Spawns its own dist/mcp-server.js and works in a scratch project tab, so the
 // user's models are never touched.
@@ -96,8 +98,9 @@ try {
   const view = await evalJs(`const m = Mesh.all[0]; const d = BlockSmooth.getDisplayObject(m);
     const mat = Array.isArray(m.mesh.material) ? m.mesh.material[0] : m.mesh.material;
     const hits = new THREE.Raycaster(new THREE.Vector3(0, 8, 40), new THREE.Vector3(0, 0, -1)).intersectObjects([m.mesh], false);
-    return {display: !!d && d.parent === m.mesh, corners: d && d.geometry.attributes.position.count, cageHidden: mat.visible === false, cageHit: hits.length > 0}`);
-  check('viewport shows the smooth result, cage hidden but still raycastable', view?.display && view?.corners === 384 && view?.cageHidden && view?.cageHit, JSON.stringify(view));
+    return {display: !!d && d.parent === m.mesh, vertices: d && d.geometry.attributes.position.count, indices: d && d.geometry.index.count, cageHidden: mat.visible === false, cageHit: hits.length > 0}`);
+  check('viewport shows the smooth result, cage hidden but still raycastable', view?.display && view?.indices === 96 * 6 && view?.cageHidden && view?.cageHit, JSON.stringify(view));
+  check('viewport shares vertices (fewer than 4 per quad)', view?.vertices > 0 && view?.vertices < 96 * 4, JSON.stringify(view));
 
   const multi = await smooth({ action: 'describe', meshes: ['box'] });
   check('"meshes" works without "mesh"', !multi.isError && multi.json?.meshes?.length === 1, multi.text.slice(0, 120));
@@ -144,9 +147,13 @@ try {
     const save = Codecs.project.compile({compressed: false, backup: true, raw: true});
     const text = await pending;
     const gltf = JSON.parse(text);
-    return {baked, savedFaces: Object.keys(save.elements.find(e => e.uuid === m.uuid).faces).length, gltfCorners: gltf.accessors[gltf.meshes[0].primitives[0].attributes.POSITION].count, after: Object.keys(m.faces).length}`);
+    const prims = gltf.meshes[0].primitives;
+    return {baked, savedFaces: Object.keys(save.elements.find(e => e.uuid === m.uuid).faces).length,
+      gltfVertices: prims.reduce((s, p) => s + gltf.accessors[p.attributes.POSITION].count, 0),
+      gltfIndices: prims.reduce((s, p) => s + gltf.accessors[p.indices].count, 0), after: Object.keys(m.faces).length}`);
   check('saving during an async glTF export writes the cage', during?.baked === 384 && during?.savedFaces === 6 && during?.after === 6, JSON.stringify(during));
-  check('glTF holds the subdivided mesh', during?.gltfCorners === 384 * 4, JSON.stringify(during));
+  check('glTF holds the subdivided mesh', during?.gltfIndices === 384 * 6, JSON.stringify(during));
+  check('glTF vertices are welded (fewer than 4 per quad)', during?.gltfVertices > 0 && during?.gltfVertices < 384 * 4, JSON.stringify(during));
   check('cage restored exactly after the glTF export', (await evalJs(cageSnap)) === before);
 
   // ── pixel art and shading
@@ -163,6 +170,55 @@ try {
   check('applied mesh is plain geometry again (no display)', afterApply?.faces === 96 && afterApply?.display === false, JSON.stringify(afterApply));
   const undone = await evalJs('Undo.undo(); const m = Mesh.all[0]; return {faces: Object.keys(m.faces).length, display: !!BlockSmooth.getDisplayObject(m)}');
   check('undo restores the cage and its modifier', undone?.faces === 6 && undone?.display === true, JSON.stringify(undone));
+
+  // ── skinned mesh: deformation, and glTF with and without the armature
+  await evalJs(`Undo.initEdit({outliner: true, elements: []});
+    const c = new Cube({name: 'tube', from: [-3, 0, -3], to: [3, 24, 3]}).init();
+    Undo.finishEdit('probe tube'); c.select(); BarItems.convert_to_mesh.click(); return 1`);
+  await tool('edit_mesh', { mesh: 'tube', steps: [{ op: 'loop_cut', select: { facing: 'north' }, cuts: 5, direction: 1 }] });
+  const rig = await tool('add_armature', { bones: [
+    { name: 'lower', head: [0, 0, 0], tail: [0, 12, 0] },
+    { name: 'upper', head: [0, 12, 0], tail: [0, 24, 0], parent: 'lower', connected: true },
+  ], meshes: ['tube'], weight_method: 'envelope', blend: 4 });
+  check('tube rigged to an armature', !rig.isError, rig.text.slice(0, 120));
+  await smooth({ action: 'add', mesh: 'tube', type: 'subdivision', levels: 2 });
+  await smooth({ action: 'add', mesh: 'tube', type: 'smooth_by_angle', angle: 5 });
+  const bendRes = await tool('eval_code', { undo: false, code: `return (async () => { const errors = []; const log = console.error; console.error = (...a) => { errors.push(String(a[0]).slice(0, 120)); log(...a); };
+    try {
+      const m = Mesh.all.find(x => x.name === 'tube');
+      const rest = BlockSmooth.getDisplayObject(m).geometry.attributes.position.count;
+      const anim = new Animation({name: 'bend', length: 1}).add(true); anim.select();
+      const ba = anim.getBoneAnimator(ArmatureBone.all.find(b => b.name === 'upper'));
+      ba.addKeyframe({channel: 'rotation', time: 0, data_points: [{x: 0, y: 0, z: 0}]});
+      ba.addKeyframe({channel: 'rotation', time: 1, data_points: [{x: 0, y: 0, z: 80}]});
+      Modes.options.animate.select(); anim.select(); Timeline.setTime(1); Animator.preview();
+      const d = BlockSmooth.getDisplayObject(m); const g = d.geometry;
+      const n = g.attributes.normal.array; let bad = 0;
+      for (let i = 0; i < n.length; i += 3) { const l = Math.hypot(n[i], n[i + 1], n[i + 2]); if (!(Math.abs(l - 1) < 1e-3)) bad++; }
+      const box = new THREE.Box3().setFromBufferAttribute(g.attributes.position);
+      const exportFaces = BlockSmooth.describe(m).export.faces; // before the exports: during one, meshes hold baked data
+      const posed = Codecs.gltf.compile({embed_textures: false, animations: false, armature: false});
+      const skinned = Codecs.gltf.compile({embed_textures: false, animations: false, armature: true});
+      // Per kind of primitive: skinned (the tube, always written skinned by Blockbench) and static (the box).
+      const read = async (p) => { const j = JSON.parse(await p); const prims = j.meshes.flatMap(x => x.primitives);
+        const sum = (list) => ({vertices: list.reduce((s, q) => s + j.accessors[q.attributes.POSITION].count, 0),
+          indices: list.reduce((s, q) => s + (q.indices !== undefined ? j.accessors[q.indices].count : 0), 0)});
+        return {skinned: sum(prims.filter(q => q.attributes.WEIGHTS_0 !== undefined)), static: sum(prims.filter(q => q.attributes.WEIGHTS_0 === undefined))}; };
+      const out = {rest, bent: g.attributes.position.count, badNormals: bad, minX: +box.min.x.toFixed(2),
+        exportFaces, posed: await read(posed), skinned: await read(skinned),
+        displayAfter: !!BlockSmooth.getDisplayObject(m)};
+      Modes.options.edit.select();
+      return {...out, errors};
+    } finally { console.error = log; } })();` });
+  const bend = bendRes.json?.result;
+  if (!bend) console.log(bendRes.text.slice(0, 600));
+  check('bending re-shares vertices where smooth-by-angle edges turn sharp', bend?.bent > bend?.rest && bend?.badNormals === 0 && bend?.minX < -4, JSON.stringify(bend));
+  for (const [label, r] of [['posed glTF', bend?.posed], ['glTF with armature: true', bend?.skinned]]) {
+    check(`${label}: the armature mesh stays skinned and unwelded (one weighted vertex per face corner)`,
+      r?.skinned?.indices === bend.exportFaces * 6 && r?.skinned?.vertices === bend.exportFaces * 4, JSON.stringify(r));
+    check(`${label}: the static mesh beside it is welded`, r?.static?.indices > 0 && r?.static?.vertices < r.static.indices / 6 * 4, JSON.stringify(r));
+  }
+  check('no errors while deforming and exporting; display back afterwards', bend?.errors?.length === 0 && bend?.displayAfter, JSON.stringify(bend?.errors));
 
   console.log(failed ? `\nBLOCKSMOOTH VERIFY FAILED (${passes} passed)` : `\nBLOCKSMOOTH VERIFY PASSED (${passes} checks)`);
 } catch (err) {
