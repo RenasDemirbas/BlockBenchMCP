@@ -18,12 +18,44 @@ exports to any format Blockbench supports. Every step lands in Blockbench's undo
 ![Tools](https://img.shields.io/badge/MCP%20tools-75-6464E0)
 ![Node 18+](https://img.shields.io/badge/node-18%2B-5fa04e)
 
-**[Install](#install)** · **[What you get](#what-you-get)** · **[Workflows](#workflows)** ·
-**[Tools](#tools)** · **[Changelog](CHANGELOG.md)**
+**[Install](#install)** · **[Gallery](#gallery)** · **[What you get](#what-you-get)** ·
+**[Workflows](#workflows)** · **[Tools](#tools)** · **[Changelog](CHANGELOG.md)**
 
 </div>
 
 ---
+
+## Gallery
+
+Modelled, textured, shaded and animated by an AI assistant through this server. The `.bbmodel`
+files are in [`examples/`](examples) so you can open them and look at the rigs and keyframes.
+
+<table>
+  <tr>
+    <td align="center" width="50%">
+      <img src="assets/gallery/fox_trot.gif" alt="A red fox trotting: diagonal leg pairs, body bob and a swaying two-part tail" width="360"><br>
+      <b>Forest fox</b> · trot cycle<br>
+      <sub>Cubes and a baked shading layer. Diagonal gait, feet kept on the ground, tail and ears follow through.</sub>
+    </td>
+    <td align="center" width="50%">
+      <img src="assets/gallery/dragon_fly.gif" alt="A green dragon whelp flying with flapping wings and a waving tail" width="360"><br>
+      <b>Dragon whelp</b> · flight loop<br>
+      <sub>Fast downstroke, slow recovery. Wing tips and a three-bone tail trail behind the beat.</sub>
+    </td>
+  </tr>
+  <tr>
+    <td align="center" width="50%">
+      <img src="assets/gallery/mimic_ambush.gif" alt="A treasure chest mimic that lunges, opens its lid to reveal an eye and a tongue, then snaps shut" width="360"><br>
+      <b>Dungeon mimic</b> · ambush<br>
+      <sub>Shiver, anticipation, lunge, bite, recoil. Squash and stretch on every landing.</sub>
+    </td>
+    <td align="center" width="50%">
+      <img src="assets/gallery/drone_scan.gif" alt="A hovering sci-fi drone scanning left and right with a spinning ring and glowing thrusters" width="360"><br>
+      <b>Sentinel drone</b> · scan patrol<br>
+      <sub>Low-poly meshes with an emissive texture. Molang hover, spinning ring, flickering thrusters.</sub>
+    </td>
+  </tr>
+</table>
 
 ## What you get
 
