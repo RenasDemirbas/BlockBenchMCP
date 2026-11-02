@@ -49,7 +49,7 @@ export function registerProjectTools(server: McpServer) {
 
   server.registerTool('create_project', {
     title: 'Create project',
-    description: 'Create a new Blockbench project. Formats: "bedrock" (Minecraft Bedrock entity with bone animations — the usual choice for animated models), "bedrock_block" (static Bedrock block), "java_block" (Java block/item with display transforms, 22.5° rotation steps), "free" (generic: meshes + animations + bounding boxes, most flexible), "modded_entity", "optifine_entity", "skin". Groups act as animation bones in bone-rig formats.\n\nSKIN / ENTITY TEMPLATES: format "skin" + "skin_model" builds a ready-made Minecraft model with its texture template to paint — steve, alex, cushion (new in 5.2), armor_stand, and every mob (cow, fox, wolf_baby, ...). An unknown id returns the full list.',
+    description: 'Create a new Blockbench project. Formats: "bedrock" (Minecraft Bedrock entity with bone animations — the usual choice for animated models), "bedrock_block" (static Bedrock block), "java_block" (Java block/item with display transforms, 22.5° rotation steps), "free" (generic: meshes + animations + bounding boxes, most flexible), "modded_entity", "optifine_entity", "skin", and with the Hytale Models plugin installed "hytale_character" / "hytale_prop" (Hytale .blockymodel: a block is 64 / 32 units, models face +Z, cubes and quads only — list_formats gives the full rules). Groups act as animation bones in bone-rig formats.\n\nSKIN / ENTITY TEMPLATES: format "skin" + "skin_model" builds a ready-made Minecraft model with its texture template to paint — steve, alex, cushion (new in 5.2), armor_stand, and every mob (cow, fox, wolf_baby, ...). An unknown id returns the full list.',
     inputSchema: {
       format: z.string().default('bedrock').describe('Format id, see list_formats'),
       name: z.string().optional().describe('Project/model name'),
@@ -102,16 +102,16 @@ export function registerProjectTools(server: McpServer) {
       export: {
         command: 'export_model',
         timeoutMs: 60_000,
-        description: 'Export to game/DCC formats without dialogs: bbmodel, bedrock_geo (.geo.json), java_block (.json), gltf, glb, obj (+mtl+textures), fbx, dae, stl, optifine_jem. Textures embed or export alongside depending on format.',
+        description: 'Export to game/DCC formats without dialogs: bbmodel, bedrock_geo (.geo.json), java_block (.json), gltf, glb, obj (+mtl+textures), fbx, dae, stl, optifine_jem, blockymodel (Hytale; needs a hytale_character / hytale_prop project and the Hytale Models plugin, reports Hytale problems such as more than 255 nodes under "warnings"). Textures embed or export alongside depending on format.',
         inputSchema: {
-          format: z.enum(['bbmodel', 'bedrock_geo', 'java_block', 'gltf', 'glb', 'obj', 'fbx', 'dae', 'stl', 'optifine_jem']).describe('export: any of these; get_json: bbmodel, bedrock_geo, java_block or gltf'),
+          format: z.enum(['bbmodel', 'bedrock_geo', 'java_block', 'gltf', 'glb', 'obj', 'fbx', 'dae', 'stl', 'optifine_jem', 'blockymodel']).describe('export: any of these; get_json: bbmodel, bedrock_geo, java_block, gltf or blockymodel'),
           path: z.string(),
           options: z.record(z.string(), z.any()).optional().describe('export codec options, e.g. {scale: 1, embed_textures: true, animations: true} for gltf/glb. Armature rigs: {armature: true} exports skinned meshes; {merge_armature: true} (Blockbench 5.2) merges all meshes of an armature into ONE skinned mesh instead of one per mesh.'),
         },
       },
       export_animations: {
         command: 'export_animations',
-        description: 'Export animations to a Bedrock .animation.json file.',
+        description: 'Export animations: to a Bedrock .animation.json file, or in a Hytale project one .blockyanim per animation ("path" is then a folder, or a .blockyanim file for a single animation).',
         inputSchema: {
           path: z.string(),
           animations: z.array(z.string()).optional().describe('export_animations: names/uuids (default: all)'),
@@ -121,7 +121,7 @@ export function registerProjectTools(server: McpServer) {
         command: 'get_model_json',
         description: 'Return the compiled model file content inline without writing to disk — for inspection.',
         inputSchema: {
-          format: z.enum(['bbmodel', 'bedrock_geo', 'java_block', 'gltf']).optional(),
+          format: z.enum(['bbmodel', 'bedrock_geo', 'java_block', 'gltf', 'blockymodel']).optional(),
           max_length: z.number().optional().describe('get_json: truncation limit, default 60000 chars'),
         },
       },

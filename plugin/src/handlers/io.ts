@@ -1,6 +1,7 @@
 // Export / import: every codec Blockbench ships, without dialogs.
 import { register, fail, requireProject } from '../registry';
 import { resolveAnimation } from '../util';
+import { blockymodelCodec, hytaleExportWarnings, isHytaleFormat, writeBlockyanims } from '../hytale';
 
 const EXPORT_FORMATS: Record<string, { codec: () => any; extension: string; options?: any; note?: string }> = {
   bbmodel: { codec: () => Codecs.project, extension: 'bbmodel' },
@@ -13,6 +14,7 @@ const EXPORT_FORMATS: Record<string, { codec: () => any; extension: string; opti
   dae: { codec: () => Codecs.collada, extension: 'dae' },
   stl: { codec: () => Codecs.stl, extension: 'stl' },
   optifine_jem: { codec: () => Codecs.optifine_entity, extension: 'jem' },
+  blockymodel: { codec: blockymodelCodec, extension: 'blockymodel', note: 'Hytale model (Hytale Models plugin). Animations are separate .blockyanim files: project_file action "export_animations".' },
 };
 
 register('export_model', async (params) => {
@@ -29,7 +31,8 @@ register('export_model', async (params) => {
   if (content instanceof Promise) content = await content;
   codec.write(content, params.path);
   const size = typeof content === 'string' ? content.length : (content?.byteLength ?? 0);
-  return { exported: format, path: params.path, bytes: size, note: spec.note };
+  const warnings = format === 'blockymodel' ? hytaleExportWarnings() : [];
+  return { exported: format, path: params.path, bytes: size, note: spec.note, warnings: warnings.length ? warnings : undefined };
 });
 
 register('get_model_json', async (params) => {
@@ -54,11 +57,16 @@ register('get_model_json', async (params) => {
 register('export_animations', (params) => {
   requireProject();
   if (!Format.animation_mode) fail(`Format "${Format.id}" has no animations.`);
-  if (!params.path) fail('Pass an absolute output "path" (e.g. C:/.../model.animation.json).');
+  if (!params.path) fail(isHytaleFormat()
+    ? 'Pass an absolute output "path": a folder (one <name>.blockyanim per animation) or a .blockyanim file for a single animation.'
+    : 'Pass an absolute output "path" (e.g. C:/.../model.animation.json).');
   const animations = Array.isArray(params.animations) && params.animations.length
     ? params.animations.map((id: string) => resolveAnimation(id))
     : Animation.all;
   if (!animations.length) fail('There are no animations to export. Create one with create_animation.');
+  if (isHytaleFormat()) {
+    return { exported: animations.map((a: any) => a.name), format: 'blockyanim', files: writeBlockyanims(animations, params.path) };
+  }
   const codec = AnimationCodec.codecs.bedrock;
   if (!codec) fail('Bedrock animation codec unavailable.');
   const compiled = codec.compileFile(animations);

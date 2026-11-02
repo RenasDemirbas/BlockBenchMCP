@@ -2,6 +2,7 @@
 import { register, fail, requireProject } from '../registry';
 import { describeTexture, systemPaths } from '../util';
 import { loadModelFromDisk } from './io';
+import { isHytaleFormat, requireHytalePlugin } from '../hytale';
 
 const FORMAT_NOTES: Record<string, string> = {
   free: 'Generic model. Most flexible: meshes, armatures, animations, per-texture UV size. Animations are saved inside the .bbmodel only.',
@@ -12,6 +13,8 @@ const FORMAT_NOTES: Record<string, string> = {
   optifine_entity: 'OptiFine JEM entity model.',
   skin: 'Minecraft skin / entity texture editor. create_project takes "skin_model" (steve, alex, cushion, any mob...) and builds that template with a texture to paint.',
   image: '2D image editing format.',
+  hytale_character: 'Hytale character or attachment (.blockymodel, Hytale Models plugin). A block is 64 units; 1 texture pixel per unit, one texture per model. Models face +Z (south). Cubes and quads only (no meshes); whole-unit cube sizes, use "stretch" for fine scaling. Each group\'s first unrotated cube is its shape, so a group plus one cube is one node; max 255 nodes. Animations run at 60 FPS and export one .blockyanim per animation.',
+  hytale_prop: 'Hytale prop or block model (.blockymodel, Hytale Models plugin). A block is 32 units; otherwise the same rules as hytale_character.',
 };
 
 function formatInfo(format: any) {
@@ -76,6 +79,7 @@ register('create_project', (params) => {
   const id = params.format || 'bedrock';
   const format = Formats[id];
   if (!format) {
+    if (isHytaleFormat(id)) requireHytalePlugin();
     fail(`Unknown format "${id}". Available formats: ${Object.keys(Formats).join(', ')}`);
   }
   if (params.skin_model && id !== 'skin') fail('"skin_model" only applies to format "skin".');
@@ -97,6 +101,7 @@ register('create_project', (params) => {
     texture_size: [Project.texture_width, Project.texture_height],
     bones: Format.id === 'skin' ? getAllGroups().map((g: any) => g.name) : undefined,
     format_capabilities: formatInfo(Format).capabilities,
+    format_notes: FORMAT_NOTES[Format.id],
   };
 });
 

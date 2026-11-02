@@ -12,7 +12,7 @@ export function registerAnimationTools(server: McpServer) {
       name: z.string(),
       loop: z.enum(['once', 'loop', 'hold']).optional().describe('default "once"; "loop" repeats, "hold" freezes on last frame'),
       length: z.number().optional().describe('Seconds; auto-extends to the last keyframe'),
-      snapping: z.number().optional().describe('Keyframe FPS grid, default 24'),
+      snapping: z.number().optional().describe('Keyframe FPS grid, default 24 (60 in Hytale formats)'),
       override: z.boolean().optional().describe('Override lower animation layers (bedrock)'),
       anim_time_update: z.string().optional().describe('Molang'),
       blend_weight: z.string().optional().describe('Molang'),

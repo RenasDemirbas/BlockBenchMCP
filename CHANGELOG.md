@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.12.0 — Hytale models
+
+- Hytale support through the official Hytale Models plugin: `create_project` takes
+  `hytale_character` and `hytale_prop` (and says how to install the plugin when it is missing),
+  `project_file` `export` / `get_json` take `blockymodel`, and `export_animations` writes one
+  `.blockyanim` per animation in a Hytale project. The export reports what Hytale would show
+  differently: more than 255 nodes, a texture whose UV size is not its pixel size, meshes, and
+  non-integer cube sizes.
+- `list_formats` and `create_project` describe the Hytale rules (block size, +Z forward, nodes,
+  60 FPS); `create_animation` defaults to 60 FPS snapping in Hytale formats.
+
 ## 1.11.1 — smooth_mesh fix
 
 - `smooth_mesh`: `describe`, `add` and `apply` accept `meshes` without `mesh` (1.11.0 rejected the

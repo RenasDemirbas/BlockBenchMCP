@@ -29,7 +29,8 @@ exports to any format Blockbench supports. Every step lands in Blockbench's undo
 
 - **Minecraft-style models end to end.** Bone trees, cubes with mirrored twins, fur and leaf cards,
   texture templates, painting by face or by whole limb, keyframes with Molang, 20 motion presets.
-  Bedrock, Java, OptiFine and glTF out.
+  Bedrock, Java, OptiFine and glTF out, and Hytale `.blockymodel` / `.blockyanim` with the Hytale
+  Models plugin.
 - **Low-poly, hand-painted characters.** Limbs from cross-sections, extrude / inset / bevel, taper
   and bend with proportional falloff, island unwrapping, light / AO / edge baking into a pixel-art
   ramp, palette locking.
@@ -191,6 +192,24 @@ Needs the [BlockSmooth](https://github.com/RenasDemirbas/BlockSmooth) plugin (`b
 4. `smooth_mesh {action: "add", type: "smooth_by_angle", angle: 30}` for crisp shading on flat panels.
 5. `project_file` `export` (OBJ, FBX, glTF/GLB, Collada, STL): the files contain the subdivided mesh at
    `export_levels`; the `.bbmodel` keeps the editable cage.
+
+</details>
+
+<details>
+<summary><b>Hytale model</b></summary>
+
+Needs the official **Hytale Models** plugin (File → Plugins → Available, search "Hytale"). The bridge
+uses its formats and file writers, so the files are the ones Blockbench's own Hytale export makes.
+
+1. `create_project {format: "hytale_character"}` for characters and attachments (a block is 64 units),
+   `"hytale_prop"` for props and blocks (32 units). Models face +Z (south), unlike Minecraft entities.
+2. Groups are the nodes: give each group one unrotated cube as its shape. Keep cube sizes whole
+   (scale finely with the cube's `stretch`), use one texture at 1 pixel per unit, stay under 255
+   nodes. `add_planes` with `double_sided: false` makes a Hytale quad.
+3. Animations snap to 60 FPS by default.
+4. `project_file` `export` `blockymodel`; the result lists anything Hytale will show differently
+   under `warnings`. `export_animations` with a folder `path` writes one `<name>.blockyanim` per
+   animation.
 
 </details>
 

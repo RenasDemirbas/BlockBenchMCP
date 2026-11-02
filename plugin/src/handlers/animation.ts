@@ -3,6 +3,7 @@
 import { register, fail, requireProject } from '../registry';
 import { resolveAnimation, resolveNode, clampInt } from '../util';
 import { takeScreenshot } from './camera';
+import { isHytaleFormat } from '../hytale';
 
 function requireAnimationSupport() {
   requireProject();
@@ -89,7 +90,7 @@ register('create_animation', (params) => {
     name: params.name,
     loop: ['once', 'loop', 'hold'].includes(params.loop) ? params.loop : (params.loop === true ? 'loop' : 'once'),
     length: params.length ?? 0,
-    snapping: clampInt(params.snapping ?? 24, 10, 500),
+    snapping: clampInt(params.snapping ?? (isHytaleFormat() ? 60 : 24), 10, 500),
     override: params.override === true,
     anim_time_update: params.anim_time_update || '',
     blend_weight: params.blend_weight || '',
