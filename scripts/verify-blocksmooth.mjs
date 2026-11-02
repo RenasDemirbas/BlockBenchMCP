@@ -99,6 +99,10 @@ try {
     return {display: !!d && d.parent === m.mesh, corners: d && d.geometry.attributes.position.count, cageHidden: mat.visible === false, cageHit: hits.length > 0}`);
   check('viewport shows the smooth result, cage hidden but still raycastable', view?.display && view?.corners === 384 && view?.cageHidden && view?.cageHit, JSON.stringify(view));
 
+  const multi = await smooth({ action: 'describe', meshes: ['box'] });
+  check('"meshes" works without "mesh"', !multi.isError && multi.json?.meshes?.length === 1, multi.text.slice(0, 120));
+  const none = await smooth({ action: 'add', type: 'subdivision' });
+  check('add without mesh or meshes is rejected', none.isError && /"mesh"/.test(none.text), none.text.slice(0, 120));
   const crease = await smooth({ action: 'crease', mesh: 'box', angle: 60 });
   check('crease by angle: the 12 box edges', crease.json?.edges === 12 && crease.json?.mesh?.creased_edges === 12, crease.text.slice(0, 160));
   const upd = await smooth({ action: 'update', mesh: 'box', modifier: 0, export_levels: 3 });

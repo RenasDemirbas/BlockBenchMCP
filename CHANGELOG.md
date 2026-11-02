@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.11.1 — smooth_mesh fix
+
+- `smooth_mesh`: `describe`, `add` and `apply` accept `meshes` without `mesh` (1.11.0 rejected the
+  call because `mesh` was marked required). `verify-blocksmooth.mjs` checks both forms.
+
 ## 1.11.0 — Smooth meshes
 
 - New tool `smooth_mesh` for smooth, professional meshes through the non-destructive modifiers of

@@ -6,8 +6,9 @@ import { mutating, registerGroup } from './shared';
 
 export function registerSmoothTools(server: McpServer) {
   const mesh = { mesh: z.string().describe('Mesh name/uuid') };
+  // Actions on several meshes take "mesh" OR "meshes"; the plugin fails when neither is given.
   const target = {
-    mesh: mesh.mesh,
+    mesh: mesh.mesh.optional(),
     meshes: z.array(z.string()).optional().describe('Several meshes at once (instead of "mesh")'),
   };
   const modifier = { modifier: z.union([z.string(), z.number()]).describe('Modifier id, or its index in the stack (0 = first), from "describe"') };
@@ -34,7 +35,7 @@ export function registerSmoothTools(server: McpServer) {
       describe: {
         command: 'smooth_describe',
         description: 'The modifier stack, creased / sharp edge counts and what it produces in the viewport and in exports. Without mesh/meshes: every mesh of the project.',
-        inputSchema: { ...target, mesh: target.mesh.optional() },
+        inputSchema: { ...target },
       },
       add: {
         command: 'smooth_add',
